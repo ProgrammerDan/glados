@@ -9,6 +9,7 @@ var user = require('./routes/user');
 var http = require('http');
 var path = require('path');
 var cors = require('cors');
+var mongoose = require('mongoose');
 var mineflayer = require('mineflayer');
 
 var app = express();
@@ -40,6 +41,27 @@ http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
 });
 
+//Database
+var db = mongoose.connect('mongodb://localhost/glados');
+var Schema = mongoose.Schema;
+
+var loginSchema = new Schema({
+  username: String,
+  date: {type: Date, default: Date.now},
+  logout: { type: Boolean, default: false}
+});
+var Login = db.model('Login', loginSchema);
+var entrySchema = new Schema({
+  username: String,
+  date: {type: Date, default: Date.now},
+  coords: [{x: Number, y: Number, z: Number}],
+  snitchName: String
+});
+var Entry = db.model('Entry', entrySchema);
+mongoose.connection.once('connected', function() {
+  console.log('Connected to database');
+});
+
 //Api
 app.get('/players', cors(), function (req, res) {
   var players = [];
@@ -49,19 +71,48 @@ app.get('/players', cors(), function (req, res) {
   res.send(players);
 });
 
+app.get('/players/login', cors(), function (req, res) {
+  Login.find(req.query, 'username logout date -_id', function(err, docs) {
+    res.send(docs);
+  });
+});
+
+app.get('/entries', cors(), function (req, res) {
+  Entry.find(req.query, 'username coords date snitchName -_id', function(err, docs) {
+    res.send(docs);
+  });
+});
+
 //Bot
 bot.on('playerJoined', function (player) {
-  bot.chat(player.username + " has joined.");
   console.log(player.username + " has joined.");
+  Login.create({ username: player.username}, function(err) {
+    if (err) {
+      console.log(err);
+    }
+  });
 });
 
 bot.on('playerLeft', function (player) {
-  bot.chat(player.username + " has left.");
   console.log(player.username + " has left.");
+  Login.create({ username: player.username, logout: true }, function(err) {
+    if (err) {
+      console.log(err);
+    }
+  });
 });
 
-bot.on('chat', function (sender, message) {
-  if (message === 'players') {
-    console.log(bot.players);
+bot.on('message', function(jsonMsg) {
+  var snitchRegex = /^.b \* (.+) entered snitch at (.+) \[(-?\d+) (-?\d+) (-?\d+)\]/;
+  var snitchResult = snitchRegex.exec(jsonMsg.text);
+  if(snitchResult) {
+    Entry.create({
+      username: snitchResult[1],
+      snitchName: snitchResult[2],
+      coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}]
+    }, function(err, doc) {
+      console.log(err);
+      console.log(doc);
+    });
   }
 });
