@@ -8,6 +8,7 @@ var routes = require('./routes');
 var user = require('./routes/user');
 var http = require('http');
 var path = require('path');
+var request = require('request');
 var cors = require('cors');
 var mongoose = require('mongoose');
 var mineflayer = require('mineflayer');
@@ -81,6 +82,17 @@ app.get('/entries', cors(), function (req, res) {
   Entry.find(req.query, 'username coords date snitchName -_id', function(err, docs) {
     res.send(docs);
   });
+});
+
+//CORS forwarding for Civtrade and Civbounty
+app.get('/civtrade/shops', cors(), function(req, res) {
+  res.setHeader('Content-Type', 'application/json');
+  request({url: 'http://civtrade.herokuapp.com/shops', json: true, qs: {search: req.query.search, page: req.query.page}}, function(e, r, b) {res.send(b)});
+});
+
+app.get('/perpetrators', cors(), function(req, res) {
+  res.setHeader('Content-Type', 'application/json');
+  request({url: 'http://www.civbounty.com/api/perpetrators/active', json: true}, function(e, r, b) {res.send(b)});
 });
 
 //Bot
