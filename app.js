@@ -96,6 +96,9 @@ app.get('/perpetrators', cors(), function(req, res) {
 });
 
 //Bot
+bot.on('spawn', function() {
+  console.log('connected');
+});
 bot.on('playerJoined', function (player) {
   console.log(player.username + " has joined.");
   Login.create({ username: player.username}, function(err) {
@@ -127,4 +130,12 @@ bot.on('message', function(jsonMsg) {
       console.log(doc);
     });
   }
+});
+
+bot.on('login', function(){
+  setInterval(function(){
+      var yaw = Math.floor(Math.random() * 360);
+      var pitch = Math.floor(Math.random() * 360);
+      bot.look(yaw, pitch, true);
+    }, 2000);
 });
