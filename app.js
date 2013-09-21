@@ -117,6 +117,10 @@ bot.on('playerLeft', function (player) {
   });
 });
 
+function getRandomInt (min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 bot.on('message', function(jsonMsg) {
   var snitchRegex = /^.b \* (.+) entered snitch at (.+) \[(-?\d+) (-?\d+) (-?\d+)\]/;
   var snitchResult = snitchRegex.exec(jsonMsg.text);
@@ -124,7 +128,7 @@ bot.on('message', function(jsonMsg) {
     Entry.create({
       username: snitchResult[1],
       snitchName: snitchResult[2],
-      coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}]
+      coords: [{x: Math.round(snitchResult[3]) + getRandomInt(0, 8), y: Math.round(snitchResult[4]) + getRandomInt(0, 8), z: Math.round(snitchResult[5]) + getRandomInt(0, 8)}]
     }, function(err, doc) {
       console.log(err);
       console.log(doc);
