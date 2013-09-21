@@ -73,15 +73,21 @@ app.get('/players', cors(), function (req, res) {
 });
 
 app.get('/players/login', cors(), function (req, res) {
-  Login.find(req.query, 'username logout date -_id', function(err, docs) {
-    res.send(docs);
-  });
+  var limit = req.query.limit;
+  delete req.query.limit;
+  var skip = req.query.skip;
+  delete req.query.skip;
+  var findLogin = Login.find(req.query, 'username logout date -_id').limit(limit).sort({'date': -1}).skip(skip);
+  findLogin.execFind(function(err, docs) { res.send(docs); });
 });
 
 app.get('/entries', cors(), function (req, res) {
-  Entry.find(req.query, 'username coords date snitchName -_id', function(err, docs) {
-    res.send(docs);
-  });
+  var limit = req.query.limit;
+  delete req.query.limit;
+  var skip = req.query.skip;
+  delete req.query.skip;
+  var findEntry = Entry.find(req.query, 'username coords date snitchName -_id').limit(limit).sort({'date': -1}).skip(skip);
+  findEntry.execFind(function(err, docs) { res.send(docs); });
 });
 
 //CORS forwarding for Civtrade and Civbounty
