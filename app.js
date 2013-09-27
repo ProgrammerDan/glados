@@ -13,10 +13,14 @@ var cors = require('cors');
 var mongoose = require('mongoose');
 var mineflayer = require('mineflayer');
 
+var config = require('configurizer').getVariables();
+console.log(config);
 var app = express();
 var bot = mineflayer.createBot({
-  host: 'localhost',
-  username: 'GLaDOS',
+  host: config.host,
+  port: config.port,
+  username: config.username,
+  password: config.password
 });
 
 // all environments
