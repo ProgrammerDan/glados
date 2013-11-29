@@ -116,6 +116,9 @@ bot.on('playerJoined', function (player) {
       console.log(err);
     }
   });
+  var joinGreetings = ['Welcome back to Civcraft!', 'Welcome back to Civcraft, ' + player.username + '!', 'hey ' + player.username, 'greetings, human', 'Hi ' + player.username, 'I blame ' + player.username + ' for the gimmick brigade. oops, mistell', 'hey', 'hi', 'hello', 'hello ' + player.username, 'All hail Glorious Leader Big Blue!'];
+  var chosenGreeting = joinGreetings[getRandomInt(1, joinGreetings.length)];
+  bot.whisper(player.username, chosenGreeting);
 });
 
 bot.on('playerLeft', function (player) {
