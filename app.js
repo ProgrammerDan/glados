@@ -15,6 +15,7 @@ var mineflayer = require('mineflayer');
 
 var config = require('configurizer').getVariables();
 var app = express();
+var loggingIn = true;
 var bot = mineflayer.createBot({
   host: config.host,
   port: config.port,
@@ -143,7 +144,9 @@ bot.on('playerJoined', function (player) {
   });
   var joinGreetings = ['Welcome back to Civcraft!', 'Welcome back to Civcraft, ' + player.username + '!', 'hey ' + player.username, 'greetings, human', 'Hi ' + player.username, 'I blame ' + player.username + ' for the gimmick brigade. oops, mistell', 'hey', 'hi', 'hello', 'hello ' + player.username, 'All hail Glorious Leader Big Blue!'];
   var chosenGreeting = joinGreetings[getRandomInt(1, joinGreetings.length)];
-  bot.plainChat('/tell ' + player.username + ' ' + chosenGreeting);
+  if(!loggingIn) {
+    bot.plainChat('/tell ' + player.username + ' ' + chosenGreeting);
+  }
 });
 
 bot.on('playerLeft', function (player) {
@@ -178,6 +181,9 @@ bot.on('message', function(jsonMsg) {
 });
 
 bot.on('login', function(){
+  setTimeout(function() {
+    loggingIn = false;
+  }, 2000);
   setInterval(function(){
       var yaw = Math.floor(Math.random() * 360);
       var pitch = Math.floor(Math.random() * 360);
