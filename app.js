@@ -14,7 +14,6 @@ var mongoose = require('mongoose');
 var mineflayer = require('mineflayer');
 
 var config = require('configurizer').getVariables();
-console.log(config);
 var app = express();
 var bot = mineflayer.createBot({
   host: config.host,
@@ -94,6 +93,31 @@ app.get('/entries', cors(), function (req, res) {
   findEntry.execFind(function(err, docs) { res.send(docs); });
 });
 
+app.get('/status/:stat', cors(), function (req, res) {
+  var serverStats = {
+    time: /^.8    Time since last restart: .6(\d+).8 W, .6(\d+).8 D, .6(\d+).8 H, .6(\d+).8 M, .6(\d+).8 S/,
+    memory: /^.8    Free allocated memory: .6(\d+).8 MB \((\d+)%\)/,
+    serverLogSize: /^.8    Server log size: .6(\d+) bytes \((\d+) MB\)/,
+    freeDisk: /^.8    Free disk size: .6(\d+) MB/,
+    currentWorldSize: /^.8    Current world size: .6(\d+) MB/,
+    loadedChunks: /^.8    Loaded chunks in this world: .6(\d+)/,
+    livingEntities: /^.8    Living entities in this world: .6(\d+)/,
+    tps: /^.8    TPS: .6(\d+\.\d+)/,
+    getQueueSize: /^(\d+) players are in the queue./
+  }
+
+  if (req.params.stat === 'getQueueSize') {
+    bot.plainChat('/gqs');
+  } else {
+    bot.plainChat('/ss');
+  }
+  bot.on('message', function(jsonMsg) {
+    if(serverStats[req.params.stat].exec(jsonMsg.text)) {
+      res.send(serverStats[req.params.stat].exec(jsonMsg.text));
+    }
+  })
+});
+
 //CORS forwarding for Civtrade and Civbounty
 app.get('/civtrade/shops', cors(), function(req, res) {
   res.setHeader('Content-Type', 'application/json');
@@ -109,6 +133,7 @@ app.get('/perpetrators', cors(), function(req, res) {
 bot.on('spawn', function() {
   console.log('connected');
 });
+
 bot.on('playerJoined', function (player) {
   console.log(player.username + " has joined.");
   Login.create({ username: player.username}, function(err) {
@@ -116,6 +141,9 @@ bot.on('playerJoined', function (player) {
       console.log(err);
     }
   });
+  var joinGreetings = ['Welcome back to Civcraft!', 'Welcome back to Civcraft, ' + player.username + '!', 'hey ' + player.username, 'greetings, human', 'Hi ' + player.username, 'I blame ' + player.username + ' for the gimmick brigade. oops, mistell', 'hey', 'hi', 'hello', 'hello ' + player.username, 'All hail Glorious Leader Big Blue!'];
+  var chosenGreeting = joinGreetings[getRandomInt(1, joinGreetings.length)];
+  bot.plainChat('/tell ' + player.username + ' ' + chosenGreeting);
 });
 
 bot.on('playerLeft', function (player) {
@@ -144,6 +172,9 @@ bot.on('message', function(jsonMsg) {
       console.log(doc);
     });
   }
+
+  console.log(jsonMsg.text);
+
 });
 
 bot.on('login', function(){
