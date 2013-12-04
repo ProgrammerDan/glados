@@ -60,9 +60,21 @@ var entrySchema = new Schema({
   username: String,
   date: {type: Date, default: Date.now},
   coords: [{x: Number, y: Number, z: Number}],
-  snitchName: String
+  snitchName: String,
+  snitchGroup: String
 });
 var Entry = db.model('Entry', entrySchema);
+var strongholdGroupMemberSchema = new Schema({
+  username: String,
+  permissionLevel: String
+});
+var StrongholdGroupMember = db.model('StrongholdGroupMember', strongholdGroupMemberSchema);
+var strongholdGroupSchema = new Schema({
+  groupName: String,
+  members: [strongholdGroupMemberSchema]
+});
+var StrongholdGroup = db.model('StrongholdGroup', strongholdGroupSchema);
+// StrongholdGroup.create({groupName: 'test', members: [{username: 'blueavenue', permissionLevel: 'member'}, {username: 'Foofed', permissionLevel: 'moderator'}]}, function(err, doc) { console.log(doc);});
 mongoose.connection.once('connected', function() {
   console.log('Connected to database');
 });
@@ -142,11 +154,6 @@ bot.on('playerJoined', function (player) {
       console.log(err);
     }
   });
-  var joinGreetings = ['Welcome back to Civcraft!', 'Welcome back to Civcraft, ' + player.username + '!', 'hey ' + player.username, 'greetings, human', 'Hi ' + player.username, 'I blame ' + player.username + ' for the gimmick brigade. oops, mistell', 'hey', 'hi', 'hello', 'hello ' + player.username, 'All hail Glorious Leader Big Blue!', 'Did you know that robots can and do appreciate everyone at once? Including you! :)', 'This is your daily reminder that you contribute to the experiment. Thank you.', 'ilu bb', 'science is fun!', 'Asbestos is harmless (TM)', 'Thank you for participating in this Computer-Aided Enrichment Center activity! :)', 'Hi ' + player.username + ', and welcome back to the game.', 'Welcome to Peasant Simulator 2013', 'Thank you for returning to Peasant Simulator 2013, now back to work, slave.', 'i see you', 'hello?', 'is anyone there?', 'could you come over here', 'target aquired', 'hello, friend', 'Oh hi! So, how are you holding up?', player.username + ' is a psycopath and should be banned', player.username + ' is a psycopath and should be breaded', 'Would you like to talk about Cave Johnson/Batman/Darth Vader? Because he\'s cool.', 'I love you, random citizen.', 'All I do is try to do is make people feel appreciated and lighten the atmosphere, but everyone hates me for being a bot. You don\'t hate me, do you?', 'I\'m watching you', 'I violate privacy', 'Snitches are fun!', 'Call your local representative and ask them to repeal botting policy!', 'sometimes people are mean to me and it makes me feel sad :('];
-  var chosenGreeting = joinGreetings[getRandomInt(0, joinGreetings.length)];
-  if(!loggingIn) {
-    bot.plainChat('/tell ' + player.username + ' ' + chosenGreeting);
-  }
 });
 
 bot.on('playerLeft', function (player) {
@@ -166,11 +173,31 @@ bot.on('message', function(jsonMsg) {
   var snitchRegex = /^.b \* (.+) entered snitch at (.+) \[(-?\d+) (-?\d+) (-?\d+)\]/;
   var snitchResult = snitchRegex.exec(jsonMsg.text);
   if(snitchResult) {
-    Entry.create({
-      username: snitchResult[1],
-      snitchName: snitchResult[2],
-      coords: [{x: Math.round(snitchResult[3]) + getRandomInt(0, 8), y: Math.round(snitchResult[4]) + getRandomInt(0, 8), z: Math.round(snitchResult[5]) + getRandomInt(0, 8)}]
-    }, function(err, doc) {
+    bot.plainChat('/jalookup ' + snitchResult[3] + ' ' + snitchResult[4] + ' ' + snitchResult[5]); //look up the snitch's group
+    bot.on('message', function(lookupJsonMsg) { // wait for the server's response and regex it to make sure it's the right message
+      var lookupRegex = /^.bThe snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/
+      var lResult = lookupRegex.exec(lookupJsonMsg.text);
+      if (lResult) {
+        if(lResult[1] === snitchResult[3] && lResult[2] === snitchResult[4] && lResult[3] === snitchResult[5]) {
+          Entry.create({
+            username: snitchResult[1],
+            snitchName: snitchResult[2],
+            coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}],
+            snitchGroup: lResult[4]
+          }, function(err, doc) {
+            console.log(err);
+            console.log(doc);
+          });
+        }
+      }
+    });
+  }
+
+  var transferRegex = /^.dFrom ([A-Za-z_]+).d: :st transfer (.+)/;
+  var transferResult = transferRegex.exec(jsonMsg.text);
+  if(transferResult) {
+    console.log('trres');
+    StrongholdGroup.create({groupName: transferRegex[2], members: [{username: transferResult[1], permissionLevel: 'co-owner'}]}, {upsert: true}, function(err, doc) {
       console.log(err);
       console.log(doc);
     });
@@ -181,12 +208,10 @@ bot.on('message', function(jsonMsg) {
 });
 
 bot.on('login', function(){
-  setTimeout(function() {
-    loggingIn = false;
-  }, 2000);
   setInterval(function(){
       var yaw = Math.floor(Math.random() * 360);
       var pitch = Math.floor(Math.random() * 360);
       bot.look(yaw, pitch, true);
     }, 2000);
+  bot.plainChat('/cttransfer jukeTest fwhiffahder');
 });
