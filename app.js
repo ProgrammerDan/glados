@@ -12,6 +12,7 @@ var request = require('request');
 var cors = require('cors');
 var mongoose = require('mongoose');
 var mineflayer = require('mineflayer');
+var vec3 = mineflayer.vec3;
 
 var config = require('configurizer').getVariables();
 var app = express();
@@ -208,10 +209,57 @@ bot.on('message', function(jsonMsg) {
 });
 
 bot.on('login', function(){
-  setInterval(function(){
-      var yaw = Math.floor(Math.random() * 360);
-      var pitch = Math.floor(Math.random() * 360);
-      bot.look(yaw, pitch, true);
-    }, 2000);
-  bot.plainChat('/cttransfer jukeTest fwhiffahder');
+  // setInterval(function(){
+  //     var yaw = Math.floor(Math.random() * 360);
+  //     var pitch = Math.floor(Math.random() * 360);
+  //     bot.look(yaw, pitch, true);
+  //   }, 2000);
+  
+
+  //Cli
+  function completer(line) {
+    var completions = [];
+    for (var i in bot.players) {
+      completions.push(bot.players[i].username);
+    }
+    var hits = completions.filter(function(c) { return c.indexOf(line) == 0 });
+    return [hits.length ? hits : completions, line];
+  }
+  var cli = require('readline').createInterface({ input: process.stdin, output: process.stdout, completer: completer });
+  cli.setPrompt("> ", 2);
+  cli.on('line', function(line) {
+    bot.plainChat(line);
+    cli.prompt();
+  });
+  function fixStdoutFor(cli) {
+    var oldStdout = process.stdout;
+    var newStdout = Object.create(oldStdout);
+    newStdout.write = function() {
+      cli.output.write('\x1b[2K\r');
+      var result = oldStdout.write.apply(
+        this,
+        Array.prototype.slice.call(arguments)
+      );
+      cli._refreshLine();
+      return result;
+    }
+    process.__defineGetter__('stdout', function() { return newStdout; });
+  };
+  fixStdoutFor(cli);
+  cli.prompt()
 });
+
+bot.on('kicked', function(reason) {
+  console.log('Kicked with reason: ' + reason);
+});
+// bot.on('spawn', function() {
+//   var obbyGen = {
+//     button: vec3(-6437, 70, -5009),
+//     end1: vec3(-6437, 68, -5007)
+//   }
+//   setTimeout(function() {
+//     // bot.activateBlock(bot.blockAt(obbyGen.button));
+//     bot.placeBlock(bot.blockAt(obbyGen.end1), vec3(0, 1, 0));
+//     // bot.dig(bot.blockAt(obbyGen.end1), function(err) {console.log(err)});
+//   }, 2000);
+// });
