@@ -69,12 +69,13 @@ var strongholdGroupMemberSchema = new Schema({
   username: String,
   permissionLevel: String
 });
-var StrongholdGroupMember = db.model('StrongholdGroupMember', strongholdGroupMemberSchema);
-var strongholdGroupSchema = new Schema({
-  groupName: String,
-  members: [strongholdGroupMemberSchema]
-});
-var StrongholdGroup = db.model('StrongholdGroup', strongholdGroupSchema);
+// var StrongholdGroupMember = db.model('StrongholdGroupMember', strongholdGroupMemberSchema);
+// var strongholdGroupSchema = new Schema({
+//   groupName: String,
+//   groupType: String,
+//   members: [strongholdGroupMemberSchema]
+// });
+// var StrongholdGroup = db.model('StrongholdGroup', strongholdGroupSchema);
 // StrongholdGroup.create({groupName: 'test', members: [{username: 'blueavenue', permissionLevel: 'member'}, {username: 'Foofed', permissionLevel: 'moderator'}]}, function(err, doc) { console.log(doc);});
 mongoose.connection.once('connected', function() {
   console.log('Connected to database');
@@ -103,7 +104,7 @@ app.get('/entries', cors(), function (req, res) {
   delete req.query.limit;
   var skip = req.query.skip;
   delete req.query.skip;
-  var findEntry = Entry.find(req.query, 'username coords date snitchName -_id').limit(limit).sort({'date': -1}).skip(skip);
+  var findEntry = Entry.find(req.query, 'username coords date snitchName snitchGroup -_id').limit(limit).sort({'date': -1}).skip(skip);
   findEntry.execFind(function(err, docs) { res.send(docs); });
 });
 
@@ -127,6 +128,7 @@ app.get('/status/:stat', cors(), function (req, res) {
   }
   bot.on('message', function(jsonMsg) {
     if(serverStats[req.params.stat].exec(jsonMsg.text)) {
+      messageHandled = true;
       res.send(serverStats[req.params.stat].exec(jsonMsg.text));
     }
   })
@@ -171,14 +173,17 @@ function getRandomInt (min, max) {
 }
 
 bot.on('message', function(jsonMsg) {
+  messageHandled = false;
   var snitchRegex = /^.b \* (.+) entered snitch at (.+) \[(-?\d+) (-?\d+) (-?\d+)\]/;
   var snitchResult = snitchRegex.exec(jsonMsg.text);
   if(snitchResult) {
+    messageHandled = true;
     bot.plainChat('/jalookup ' + snitchResult[3] + ' ' + snitchResult[4] + ' ' + snitchResult[5]); //look up the snitch's group
     bot.on('message', function(lookupJsonMsg) { // wait for the server's response and regex it to make sure it's the right message
       var lookupRegex = /^.bThe snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/
       var lResult = lookupRegex.exec(lookupJsonMsg.text);
       if (lResult) {
+        messageHandled = true;
         if(lResult[1] === snitchResult[3] && lResult[2] === snitchResult[4] && lResult[3] === snitchResult[5]) {
           Entry.create({
             username: snitchResult[1],
@@ -186,34 +191,65 @@ bot.on('message', function(jsonMsg) {
             coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}],
             snitchGroup: lResult[4]
           }, function(err, doc) {
-            console.log(err);
-            console.log(doc);
+            console.log('Snitch saving error: ' + err);
           });
         }
       }
     });
   }
 
-  var transferRegex = /^.dFrom ([A-Za-z_]+).d: :st transfer (.+)/;
-  var transferResult = transferRegex.exec(jsonMsg.text);
-  if(transferResult) {
-    console.log('trres');
-    StrongholdGroup.create({groupName: transferRegex[2], members: [{username: transferResult[1], permissionLevel: 'co-owner'}]}, {upsert: true}, function(err, doc) {
-      console.log(err);
-      console.log(doc);
-    });
+  // var transferRegex = /^.dFrom ([A-Za-z_]+).d: :st snitchTransfer (.+)/;
+  // var transferResult = transferRegex.exec(jsonMsg.text);
+  // if(transferResult) {
+  //   bot.plainChat('/ctgroupinfo ' + transferResult[2]);
+  //   bot.on('message', function(ownershipMsg) {
+  //     var ownershipRegex = /^.+cOwner:.+e (.+)/;
+  //     if(ownershipRegex.exec(ownershipMsg.text)) {
+  //       messageHandled = true;
+  //       if(ownershipRegex.exec(ownershipMsg.text)[1] === bot.username) {
+  //         StrongholdGroup.create({groupName: transferResult[2], groupType: snitch, members: [{username: transferResult[1], permissionLevel: 'co-owner'}]}, {upsert: true}, function(err, doc) {
+  //           console.log(err);
+  //           console.log(doc);
+  //         });
+  //       }
+  //     }
+  //   });
+  //   messageHandled = true;
+  // }
+
+  if(/^.dTo .+.d: .+$/.exec(jsonMsg.text)) {
+    messageHandled = true;
   }
 
-  console.log(jsonMsg.text);
+  var messageFromSomeoneRegex = /^.dFrom (.+).d: (.+)/;
+  if(messageFromSomeoneRegex.exec(jsonMsg.text)) {
+    messageHandled = true;
+    console.log('From ' + messageFromSomeoneRegex.exec(jsonMsg.text)[1] + ': ' + messageFromSomeoneRegex.exec(jsonMsg.text)[2]);
+  }
+
+  var publicChatRegex = /^.f.f(.+).f: (.+)/;
+  if(publicChatRegex.exec(jsonMsg.text)) {
+    messageHandled = true;
+    if(publicChatRegex.exec(jsonMsg.text)[1] === bot.username) {
+      return
+    } else {
+      console.log(publicChatRegex.exec(jsonMsg.text)[1] + ': ' + publicChatRegex.exec(jsonMsg.text)[2]);
+    }
+  }
+
+  if(!messageHandled) {
+    console.log(jsonMsg.text);
+  }
 
 });
 
 bot.on('login', function(){
-  // setInterval(function(){
-  //     var yaw = Math.floor(Math.random() * 360);
-  //     var pitch = Math.floor(Math.random() * 360);
-  //     bot.look(yaw, pitch, true);
-  //   }, 2000);
+  // bot.plainChat('/cttransfer jukeTest fwhiffahder');
+  setInterval(function(){
+      var yaw = Math.floor(Math.random() * 360);
+      var pitch = Math.floor(Math.random() * 360);
+      bot.look(yaw, pitch, true);
+    }, 2000);
   
 
   //Cli
@@ -226,6 +262,13 @@ bot.on('login', function(){
     return [hits.length ? hits : completions, line];
   }
   var cli = require('readline').createInterface({ input: process.stdin, output: process.stdout, completer: completer });
+
+  var oldConsoleLog = console.log;
+  console.log = function(text) {
+    oldConsoleLog(text);
+    cli.prompt();
+  };
+
   cli.setPrompt("> ", 2);
   cli.on('line', function(line) {
     bot.plainChat(line);
