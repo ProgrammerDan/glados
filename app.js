@@ -135,12 +135,18 @@ app.get('/status/:stat', cors(), function (req, res) {
 });
 
 //CORS forwarding for Civtrade and Civbounty
-app.get('/civtrade/shops', cors(), function(req, res) {
+
+app.get('/civtrade/shops', cors(), function(req, res) { //Civtrade
   res.setHeader('Content-Type', 'application/json');
   request({url: 'http://civtrade.herokuapp.com/shops', json: true, qs: {search: req.query.search, page: req.query.page}}, function(e, r, b) {res.send(b)});
 });
 
-app.get('/perpetrators', cors(), function(req, res) {
+app.get('/civbounty/:endpoint', cors(), function(req, res) { //Civbounty
+  res.setHeader('Content-Type', 'application/json');
+  request({url: 'http://www.civbounty.com/api/' + req.params.endpoint, json: true}, function(e, r, b) {res.send(b)});
+});
+
+app.get('/perpetrators', cors(), function(req, res) { //Kept for compatibility, will be removed later
   res.setHeader('Content-Type', 'application/json');
   request({url: 'http://www.civbounty.com/api/perpetrators/active', json: true}, function(e, r, b) {res.send(b)});
 });
