@@ -147,11 +147,11 @@ app.get('/civbounty/:endpoint', cors(), function(req, res) { //Civbounty
 });
 app.get('/civbounty/perpetrators/:endpoint', cors(), function(req, res) { //Civbounty
   res.setHeader('Content-Type', 'application/json');
-  request({url: 'http://www.civbounty.com/api/' + req.params.endpoint, json: true}, function(e, r, b) {res.send(b)});
+  request({url: 'http://www.civbounty.com/api/perpetrators/' + req.params.endpoint, json: true}, function(e, r, b) {res.send(b)});
 });
 app.get('/civbounty/reports/:endpoint', cors(), function(req, res) { //Civbounty
   res.setHeader('Content-Type', 'application/json');
-  request({url: 'http://www.civbounty.com/api/' + req.params.endpoint, json: true}, function(e, r, b) {res.send(b)});
+  request({url: 'http://www.civbounty.com/api/reports/' + req.params.endpoint, json: true}, function(e, r, b) {res.send(b)});
 });
 
 app.get('/perpetrators', cors(), function(req, res) { //Kept for compatibility, will be removed later
