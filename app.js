@@ -9,7 +9,12 @@ var user = require('./routes/user');
 var http = require('http');
 var path = require('path');
 var request = require('request');
+var fs = require('fs');
 var cors = require('cors');
+var passport = require('passport');
+var util = require('util');
+var crypto = require('crypto');
+var RedditStrategy = require('passport-reddit').Strategy;
 var mongoose = require('mongoose');
 var mineflayer = require('mineflayer');
 var vec3 = mineflayer.vec3;
@@ -24,16 +29,74 @@ var bot = mineflayer.createBot({
   password: config.password
 });
 
-// all environments
-app.set('port', process.env.PORT || 3000);
-app.set('views', __dirname + '/views');
-app.set('view engine', 'jade');
-app.use(express.favicon());
-app.use(express.logger('dev'));
-app.use(express.bodyParser());
-app.use(express.methodOverride());
-app.use(app.router);
-app.use(express.static(path.join(__dirname, 'public')));
+var express = require('express')
+  , passport = require('passport')
+  , util = require('util')
+  , crypto = require('crypto')
+  , RedditStrategy = require('passport-reddit').Strategy;
+
+// Passport session setup.
+//   To support persistent login sessions, Passport needs to be able to
+//   serialize users into and deserialize users out of the session.  Typically,
+//   this will be as simple as storing the user ID when serializing, and finding
+//   the user by ID when deserializing.  However, since this example does not
+//   have a database of user records, the complete Reddit profile is
+//   serialized and deserialized.
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function(obj, done) {
+  done(null, obj);
+});
+
+
+// Use the RedditStrategy within Passport.
+//   Strategies in Passport require a `verify` function, which accept
+//   credentials (in this case, an accessToken, refreshToken, and Reddit
+//   profile), and invoke a callback with a user object.
+passport.use(new RedditStrategy({
+    clientID: config.redditConsumerKey,
+    clientSecret: config.redditConsumerSecret,
+    callbackURL: "http://localhost:3000/auth/reddit/callback"
+  },
+  function(accessToken, refreshToken, profile, done) {
+    // asynchronous verification, for effect...
+    process.nextTick(function () {
+
+      // To keep the example simple, the user's Reddit profile is returned to
+      // represent the logged-in user.  In a typical application, you would want
+      // to associate the Reddit account with a user record in your database,
+      // and return that user instead.
+      return done(null, profile);
+    });
+  }
+));
+
+
+
+
+var app = express();
+
+// configure Express
+app.configure(function() {
+  app.set('port', process.env.PORT || 3000);
+  app.set('views', __dirname + '/views');
+  app.set('view engine', 'jade');
+  app.use(express.favicon());
+  app.use(express.logger());
+  app.use(express.logger('dev'));
+  app.use(express.cookieParser());
+  app.use(express.bodyParser());
+  app.use(express.methodOverride());
+  app.use(express.session({ secret: config.sessionSecret }));
+  // Initialize Passport!  Also use passport.session() middleware, to support
+  // persistent login sessions (recommended).
+  app.use(passport.initialize());
+  app.use(passport.session());
+  app.use(app.router);
+  app.use(express.static(__dirname + '/public'));
+});
 
 // development only
 if ('development' == app.get('env')) {
@@ -43,8 +106,87 @@ if ('development' == app.get('env')) {
 app.get('/', routes.index);
 app.get('/users', user.list);
 
+app.get('/', function(req, res){
+  res.send('index ' + req.user.name);
+});
+
+app.get('/account', ensureAuthenticated, function(req, res){
+  res.send('account ' + req.user.name);
+});
+
+// GET /auth/reddit
+//   Use passport.authenticate() as route middleware to authenticate the
+//   request.  The first step in Reddit authentication will involve
+//   redirecting the user to reddit.com.  After authorization, Reddit
+//   will redirect the user back to this application at /auth/reddit/callback
+//
+//   Note that the 'state' option is a Reddit-specific requirement.
+app.get('/auth/reddit', function(req, res, next){
+  req.session.state = crypto.randomBytes(32).toString('hex');
+  passport.authenticate('reddit', {
+    state: req.session.state,
+  })(req, res, next);
+});
+
+// GET /auth/reddit/callback
+//   Use passport.authenticate() as route middleware to authenticate the
+//   request.  If authentication fails, the user will be redirected back to the
+//   login page.  Otherwise, the primary route function function will be called,
+//   which, in this example, will redirect the user to the home page.
+app.get('/auth/reddit/callback', function(req, res, next){
+  // Check for origin via state token
+  if (req.query.state == req.session.state){
+    passport.authenticate('reddit', {
+      successRedirect: '/account',
+      failureRedirect: '/login'
+    })(req, res, next);
+  }
+  else {
+    next( new Error(403) );
+  }
+});
+
+app.get('/logout', function(req, res){
+  req.logout();
+  res.redirect('/');
+});
+
 http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
+});
+
+
+// Simple route middleware to ensure user is authenticated.
+//   Use this route middleware on any resource that needs to be protected.  If
+//   the request is authenticated (typically via a persistent login session),
+//   the request will proceed.  Otherwise, the user will be redirected to the
+//   login page.
+function ensureAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) { return next(); }
+  res.redirect('/auth/reddit');
+}
+
+app.get('/auth/minecraft', ensureAuthenticated, function(req, res) {
+  if(req.query.minecraftName) {
+    request('http://minecraft.net/skin/' + req.query.minecraftName + '.png', function(error, response, body) {
+      fs.readFile('public/images/char.png', function(err, data) {
+        if(data == body) {
+          Player.find({redditName: req.user.name}, function(err, docs) {
+            if(docs[0]) {
+              res.send({response: 'already registered', error: false});
+            } else {
+              Player.create({redditName: req.user.name, minecraftName: req.query.minecraftName}, function(err) {
+                console.log(err);
+                res.send({response: 'success', error: false});
+              });
+            }
+          });
+        } else {
+          res.send({response: 'wrong skin', error: true});
+        }
+      });
+    });
+  }
 });
 
 //Database
@@ -69,14 +211,23 @@ var strongholdGroupMemberSchema = new Schema({
   username: String,
   permissionLevel: String
 });
+var strongholdGroupMemberSchema = new Schema({
+  username: String,
+  permissionLevel: String
+});
 // var StrongholdGroupMember = db.model('StrongholdGroupMember', strongholdGroupMemberSchema);
-// var strongholdGroupSchema = new Schema({
-//   groupName: String,
-//   groupType: String,
-//   members: [strongholdGroupMemberSchema]
-// });
-// var StrongholdGroup = db.model('StrongholdGroup', strongholdGroupSchema);
-// StrongholdGroup.create({groupName: 'test', members: [{username: 'blueavenue', permissionLevel: 'member'}, {username: 'Foofed', permissionLevel: 'moderator'}]}, function(err, doc) { console.log(doc);});
+var strongholdGroupSchema = new Schema({
+  groupName: String,
+  groupType: String,
+  members: [strongholdGroupMemberSchema]
+});
+var StrongholdGroup = db.model('StrongholdGroup', strongholdGroupSchema);
+var playerSchema = new Schema({
+  minecraftName: String,
+  redditName: String,
+});
+var Player = db.model('Player', playerSchema);
+// StrongholdGroup.create({groupName: 'test', groupType: 'snitch', members: [{username: 'blueavenue', permissionLevel: 'member'}, {username: 'Foofed', permissionLevel: 'moderator'}]}, function(err, doc) { console.log(doc);});
 mongoose.connection.once('connected', function() {
   console.log('Connected to database');
 });
@@ -99,13 +250,23 @@ app.get('/players/login', cors(), function (req, res) {
   findLogin.execFind(function(err, docs) { res.send(docs); });
 });
 
-app.get('/entries', cors(), function (req, res) {
+app.get('/entries', cors(), ensureAuthenticated, function (req, res) {
   var limit = req.query.limit;
   delete req.query.limit;
   var skip = req.query.skip;
   delete req.query.skip;
-  var findEntry = Entry.find(req.query, 'username coords date snitchName snitchGroup -_id').limit(limit).sort({'date': -1}).skip(skip);
-  findEntry.execFind(function(err, docs) { res.send(docs); });
+
+  var allowedGroups = [];
+  Player.findOne({redditName: req.user.name}, function(err, doc) {
+    var findGroup = StrongholdGroup.find({members: { $elemMatch: {username: doc.minecraftName} }}, 'groupName -_id');
+    findGroup.execFind(function(err, docs) {
+      for (var i = 0; i < docs.length; i++) {
+        allowedGroups.push(docs[i].groupName);
+      }
+      var findEntry = Entry.find({$and: [req.query, {snitchGroup: {$in: allowedGroups}}]}, 'username coords date snitchName snitchGroup -_id').limit(limit).sort({'date': -1}).skip(skip);
+      findEntry.execFind(function(err, docs) { res.send(docs); });
+    });
+  });
 });
 
 app.get('/status/:stat', cors(), function (req, res) {
@@ -212,24 +373,56 @@ bot.on('message', function(jsonMsg) {
     });
   }
 
-  // var transferRegex = /^.dFrom ([A-Za-z_]+).d: :st snitchTransfer (.+)/;
-  // var transferResult = transferRegex.exec(jsonMsg.text);
-  // if(transferResult) {
-  //   bot.plainChat('/ctgroupinfo ' + transferResult[2]);
-  //   bot.on('message', function(ownershipMsg) {
-  //     var ownershipRegex = /^.+cOwner:.+e (.+)/;
-  //     if(ownershipRegex.exec(ownershipMsg.text)) {
-  //       messageHandled = true;
-  //       if(ownershipRegex.exec(ownershipMsg.text)[1] === bot.username) {
-  //         StrongholdGroup.create({groupName: transferResult[2], groupType: snitch, members: [{username: transferResult[1], permissionLevel: 'co-owner'}]}, {upsert: true}, function(err, doc) {
-  //           console.log(err);
-  //           console.log(doc);
-  //         });
-  //       }
-  //     }
-  //   });
-  //   messageHandled = true;
-  // }
+  var snitchTransferRegex = /^.dFrom ([A-Za-z_]+).d: :st snitchTransfer (.+)/;
+  var snitchTransferResult = snitchTransferRegex.exec(jsonMsg.text);
+  if(snitchTransferResult) {
+    var findGroup= StrongholdGroup.find({groupName: snitchTransferResult[2].toLowerCase()}, 'groupName groupType members -_id');
+    findGroup.execFind(function(err, docs) {
+      if(docs[0]) {
+        bot.plainChat('/tell ' + snitchTransferResult[1] + ' Error: The group is already registered');
+      } else {
+        bot.plainChat('/ctgstats ' + snitchTransferResult[2]);
+        if(!docs[0]) {
+          memberObjects = [];
+          bot.on('message', function(ctgMsg) {
+            var ownershipRegex = /^Admin: (.+)/;
+            var moderatorRegex = /^Moderators: (.*)/
+            var memberRegex = /^Members: (.*)/;
+            var botIsOwner = null;
+            var botIsModerator = null;
+            if(ownershipRegex.exec(ctgMsg.text)) {
+              var owner = ownershipRegex.exec(ctgMsg.text)[1].toLowerCase();
+              memberObjects.push({ username: owner, permissionLevel: 'owner'});
+            }
+            var moderators = [];
+            if(moderatorRegex.exec(ctgMsg.text)) {
+              var moderators = moderatorRegex.exec(ctgMsg.text)[1].split(', ');
+              for (var i = 0; i < moderators.length; i++) {
+                if(moderators[i].toLowerCase() === owner) {
+                } else {
+                  memberObjects.push({ username: moderators[i].toLowerCase(), permissionLevel: 'moderator'});
+                }
+              }
+            }
+            if(memberRegex.exec(ctgMsg.text)) {
+              var members = memberRegex.exec(ctgMsg.text)[1].split(', ');
+              for (var i = 0; i < members.length; i++) {
+                memberObjects.push({ username: members[i].toLowerCase(), permissionLevel: 'member'});
+              }
+              StrongholdGroup.create({groupName: snitchTransferResult[2], groupType: 'snitch', members: memberObjects}, {upsert: true}, function(err, doc) {
+                console.log(err);
+                console.log(doc);
+                return
+              });
+            }
+            messageHandled = true;
+            if(ownershipRegex.exec(ctgMsg.text)) {
+            }
+          });
+        }
+      }
+    });
+  }
 
   if(/^.dTo .+.d: .+$/.exec(jsonMsg.text)) {
     messageHandled = true;
