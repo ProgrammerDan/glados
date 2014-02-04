@@ -1,0 +1,29 @@
+.col-md-10
+  .page-header
+    .media
+      a.pull-left: img.media-object(ng-src="http://minotar.net/helm/{{playerUsername}}/48")
+      .media-body
+        h1.media-heading {{playerUsername}}
+          .small(ng-show="bounty") {{bounty}}d Bounty
+          .small(ng-show="online") Logged in at {{loginDate | date:'shortTime'}}
+          .small(ng-hide="online") Last login at {{loginDate | date:'medium'}}, logged out at {{logoutDate | date:'medium'}}
+  .panel.panel-default
+    .panel-heading
+      p.panel-title.h3 Snitches Tripped 
+        small Sort by:
+          select(ng-model="orderProp")
+            option(value="date") Date
+            option(value="snitchName") Snitch Name
+            option(value="snitchGroup") Snitch Group
+    table.table.table-striped
+      tr
+        th Snitch Name
+        th Group
+        th Coords
+        th Date
+      tr(ng-repeat="entry in entries | orderBy: orderProp: orderReverse[orderProp]")
+        td {{entry.snitchName}}
+        td {{entry.snitchGroup}}
+        td {{entry.coords[0].x}} {{entry.coords[0].y}} {{entry.coords[0].z}}
+        td {{entry.date | date: 'medium'}}
+    .alert.alert-info(ng-hide="entries") {{playerUsername}} hasn't tripped any snitches that you have access to. Are you logged in?

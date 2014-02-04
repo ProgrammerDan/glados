@@ -1,0 +1,63 @@
+<h3>What is Neurotoxic?</h3>
+
+<p>It's going to be a map of terrain, cities, rails, etc. and logs information about the server like TPS and who logs in or out, but its main (currently only) purpose is to log your snitches.</p>
+
+<h3>Why should I use it?</h3>
+
+<p>Notification snitches do just that, and only that: they notify you. They don't store the information for later, you can't chart them or map them or find out who went where, and when. That's what Neurotoxic does. It remembers who tripped your snitches and lets you organize the information by group and player.</p>
+
+<h3>How does it work?</h3>
+
+<p>When you add the Neurotoxic bot as moderator of a group, it uses <code>/ctgstats</code> to look up the group's owner, moderators and members and stores them. It has to be a moderator because otherwise it can't use <code>/ctgstats</code>. When someone trips a snitch, the bot parses the message and saves it to the database. When you log in to the Neurotoxic website, it verifies your minecraft account and displays entries on groups it knows you have access to.</p>
+
+<h3>Who are you?</h3>
+
+<p>I'm <a href="http://reddit.com/u/fwhiffahder">/u/fwhiffahder</a> on reddit, and use the same name in-game. My name is pronounced 'fwiff-uh-duh'. I'm the one who made the Civcraft website. I don't play much because coding things like this is so fun and I'm busy a lot, but when I do I live in Haven and what's left of Carson. I've never done anything more evil than belonging to a faction that some people dislike.</p>
+
+<h3>Does Neurotoxic compromise the security of my snitches, and why should I trust you?</h3>
+
+<p>Making the Neurotoxic bot a moderator of your snitches means it <em>could</em> add and remove members (not moderators) or modify blocks on the group. It can't modify moderators or transfer the group to someone else, and you can always remove it if you want. It will never give coordinates of your snitches to anyone who wasn't on the group in the first place.</p>
+
+<p>Why should you trust me? You don't have to. I could do some (limited) evil with my power. However, it's not in my interest or everyone would stop using Neurotoxic. (I hope someday to monetize it, but payments in diamonds are currently unmanageable and it's fun to make even without payment)</p>
+
+<h3>Looks cool, how do I sign up?</h3>
+
+<p>First go <a href="http://{{host}}:3000/auth/reddit">here</a> and allow the website access to your reddit name.</p>
+
+<p>Make sure you've got a backup of your minecraft skin.</p>
+
+<p>Then go <a href="https://minecraft.net/profile/skin/remote?url=http://{{host}}:3000/images/char.png">here</a> to change your skin to the verification skin.</p>
+
+<p>Type your username here: <input ng-model=typedUsername></p>
+
+<p>Then go <a href="http://{{host}}:3000/auth/minecraft?token={{token}}&amp;minecraftName={{typedUsername}}">here</a>.</p>
+
+<p>Then go <a href="https://minecraft.net/profile">here</a> and switch back to your original skin.</p>
+
+<p>That's it! In the future, just hit 'Log In' at the top left to sign in.</p>
+
+<h3>How do I add my snitches?</h3>
+
+<p>The snitch groups you're on may already be here, in which case just hit 'Sign Up' and follow the instructions to see any entries that have been logged. If they're not, you need to get the owner of the snitch group to add them.</p>
+
+<h4>Are you the owner of the group?</h4>
+
+<p>If you own the group, use the following commands in-game to add it to the bot and website:</p>
+
+<p><code>/ctaddmod &lt;YourGroup&gt; mcamaret</code></p>
+
+<p><code>/tell mcamaret :st snitchTransfer &lt;YourGroup&gt;</code></p>
+
+<h4>Are you a moderator of the group?</h4>
+
+<p>If you're a moderator of the group, you can use <code>/ctgstats &lt;YourGroup&gt;</code> in-game to find out who the owner is.</p>
+
+<h4>Are you only a member of the group?</h4>
+
+<p>If you're not a moderator, you'll have to ask someone else who the owner is. </p>
+
+<h3>Will there be cake?</h3>
+
+<p>I hear there are <a href="http://www.reddit.com/message/compose/?to=CatZombies&amp;subject=I+hear+you're+a+cake+Nazi.&amp;message=So,+I+heard+you're+with+the+free+cake+Auroran+Nazis.+Can+I+have+some+cake?">some Nazis in Aurora</a> who give out tons of free cake.</p>
+
+<p>Note to self: implement cake.</p>

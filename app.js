@@ -16,6 +16,7 @@ var util = require('util');
 var crypto = require('crypto');
 var RedditStrategy = require('passport-reddit').Strategy;
 var mongoose = require('mongoose');
+var findOrCreate = require('mongoose-findorcreate');
 var mineflayer = require('mineflayer');
 var vec3 = mineflayer.vec3;
 
@@ -34,160 +35,6 @@ var express = require('express')
   , util = require('util')
   , crypto = require('crypto')
   , RedditStrategy = require('passport-reddit').Strategy;
-
-// Passport session setup.
-//   To support persistent login sessions, Passport needs to be able to
-//   serialize users into and deserialize users out of the session.  Typically,
-//   this will be as simple as storing the user ID when serializing, and finding
-//   the user by ID when deserializing.  However, since this example does not
-//   have a database of user records, the complete Reddit profile is
-//   serialized and deserialized.
-passport.serializeUser(function(user, done) {
-  done(null, user);
-});
-
-passport.deserializeUser(function(obj, done) {
-  done(null, obj);
-});
-
-
-// Use the RedditStrategy within Passport.
-//   Strategies in Passport require a `verify` function, which accept
-//   credentials (in this case, an accessToken, refreshToken, and Reddit
-//   profile), and invoke a callback with a user object.
-passport.use(new RedditStrategy({
-    clientID: config.redditConsumerKey,
-    clientSecret: config.redditConsumerSecret,
-    callbackURL: "http://localhost:3000/auth/reddit/callback"
-  },
-  function(accessToken, refreshToken, profile, done) {
-    // asynchronous verification, for effect...
-    process.nextTick(function () {
-
-      // To keep the example simple, the user's Reddit profile is returned to
-      // represent the logged-in user.  In a typical application, you would want
-      // to associate the Reddit account with a user record in your database,
-      // and return that user instead.
-      return done(null, profile);
-    });
-  }
-));
-
-
-
-
-var app = express();
-
-// configure Express
-app.configure(function() {
-  app.set('port', process.env.PORT || 3000);
-  app.set('views', __dirname + '/views');
-  app.set('view engine', 'jade');
-  app.use(express.favicon());
-  app.use(express.logger());
-  app.use(express.logger('dev'));
-  app.use(express.cookieParser());
-  app.use(express.bodyParser());
-  app.use(express.methodOverride());
-  app.use(express.session({ secret: config.sessionSecret }));
-  // Initialize Passport!  Also use passport.session() middleware, to support
-  // persistent login sessions (recommended).
-  app.use(passport.initialize());
-  app.use(passport.session());
-  app.use(app.router);
-  app.use(express.static(__dirname + '/public'));
-});
-
-// development only
-if ('development' == app.get('env')) {
-  app.use(express.errorHandler());
-}
-
-app.get('/', routes.index);
-app.get('/users', user.list);
-
-app.get('/', function(req, res){
-  res.send('index ' + req.user.name);
-});
-
-app.get('/account', ensureAuthenticated, function(req, res){
-  res.send('account ' + req.user.name);
-});
-
-// GET /auth/reddit
-//   Use passport.authenticate() as route middleware to authenticate the
-//   request.  The first step in Reddit authentication will involve
-//   redirecting the user to reddit.com.  After authorization, Reddit
-//   will redirect the user back to this application at /auth/reddit/callback
-//
-//   Note that the 'state' option is a Reddit-specific requirement.
-app.get('/auth/reddit', function(req, res, next){
-  req.session.state = crypto.randomBytes(32).toString('hex');
-  passport.authenticate('reddit', {
-    state: req.session.state,
-  })(req, res, next);
-});
-
-// GET /auth/reddit/callback
-//   Use passport.authenticate() as route middleware to authenticate the
-//   request.  If authentication fails, the user will be redirected back to the
-//   login page.  Otherwise, the primary route function function will be called,
-//   which, in this example, will redirect the user to the home page.
-app.get('/auth/reddit/callback', function(req, res, next){
-  // Check for origin via state token
-  if (req.query.state == req.session.state){
-    passport.authenticate('reddit', {
-      successRedirect: '/account',
-      failureRedirect: '/login'
-    })(req, res, next);
-  }
-  else {
-    next( new Error(403) );
-  }
-});
-
-app.get('/logout', function(req, res){
-  req.logout();
-  res.redirect('/');
-});
-
-http.createServer(app).listen(app.get('port'), function(){
-  console.log('Express server listening on port ' + app.get('port'));
-});
-
-
-// Simple route middleware to ensure user is authenticated.
-//   Use this route middleware on any resource that needs to be protected.  If
-//   the request is authenticated (typically via a persistent login session),
-//   the request will proceed.  Otherwise, the user will be redirected to the
-//   login page.
-function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) { return next(); }
-  res.redirect('/auth/reddit');
-}
-
-app.get('/auth/minecraft', ensureAuthenticated, function(req, res) {
-  if(req.query.minecraftName) {
-    request('http://minecraft.net/skin/' + req.query.minecraftName + '.png', function(error, response, body) {
-      fs.readFile('public/images/char.png', function(err, data) {
-        if(data == body) {
-          Player.find({redditName: req.user.name}, function(err, docs) {
-            if(docs[0]) {
-              res.send({response: 'already registered', error: false});
-            } else {
-              Player.create({redditName: req.user.name, minecraftName: req.query.minecraftName}, function(err) {
-                console.log(err);
-                res.send({response: 'success', error: false});
-              });
-            }
-          });
-        } else {
-          res.send({response: 'wrong skin', error: true});
-        }
-      });
-    });
-  }
-});
 
 //Database
 var db = mongoose.connect('mongodb://localhost/glados');
@@ -225,11 +72,200 @@ var StrongholdGroup = db.model('StrongholdGroup', strongholdGroupSchema);
 var playerSchema = new Schema({
   minecraftName: String,
   redditName: String,
+  token: String
 });
+playerSchema.plugin(findOrCreate);
 var Player = db.model('Player', playerSchema);
 // StrongholdGroup.create({groupName: 'test', groupType: 'snitch', members: [{username: 'blueavenue', permissionLevel: 'member'}, {username: 'Foofed', permissionLevel: 'moderator'}]}, function(err, doc) { console.log(doc);});
 mongoose.connection.once('connected', function() {
   console.log('Connected to database');
+});
+
+// Passport session setup.
+//   To support persistent login sessions, Passport needs to be able to
+//   serialize users into and deserialize users out of the session.  Typically,
+//   this will be as simple as storing the user ID when serializing, and finding
+//   the user by ID when deserializing.  However, since this example does not
+//   have a database of user records, the complete Reddit profile is
+//   serialized and deserialized.
+// passport.serializeUser(function(user, done) {
+//   done(null, user);
+// });
+
+// passport.deserializeUser(function(obj, done) {
+//   done(null, obj);
+// });
+
+
+// Use the RedditStrategy within Passport.
+//   Strategies in Passport require a `verify` function, which accept
+//   credentials (in this case, an accessToken, refreshToken, and Reddit
+//   profile), and invoke a callback with a user object.
+passport.use(new RedditStrategy({
+    clientID: config.redditConsumerKey,
+    clientSecret: config.redditConsumerSecret,
+    callbackURL: "http://localhost:3000/auth/reddit/callback"
+  },
+  function(accessToken, refreshToken, profile, done) {
+    Player.findOrCreate({redditName: profile.name}, function(err, usr) {
+      console.log('accessToken: ' + accessToken);
+      usr.token = accessToken;
+      usr.save(function(err, usr, num) {
+        if(err) {
+          console.log('error saving token');
+        }
+      });
+      // asynchronous verification, for effect...
+      process.nextTick(function () {
+
+        // To keep the example simple, the user's Reddit profile is returned to
+        // represent the logged-in user.  In a typical application, you would want
+        // to associate the Reddit account with a user record in your database,
+        // and return that user instead.
+        return done(null, profile);
+      });
+    });
+  }
+));
+
+
+
+
+var app = express();
+
+// configure Express
+app.configure(function() {
+  app.set('port', process.env.PORT || 3000);
+  app.set('views', __dirname + '/views');
+  app.set('view engine', 'jade');
+  app.use(express.favicon());
+  app.use(express.logger());
+  app.use(express.logger('dev'));
+  app.use(express.cookieParser());
+  app.use(express.bodyParser());
+  app.use(express.methodOverride());
+  // app.use(express.session({ secret: config.sessionSecret }));
+  // Initialize Passport!  Also use passport.session() middleware, to support
+  // persistent login sessions (recommended).
+  app.use(passport.initialize());
+  // app.use(passport.session());
+  app.use(app.router);
+  app.use(express.static(__dirname + '/public'));
+});
+
+// development only
+if ('development' == app.get('env')) {
+  app.use(express.errorHandler());
+}
+
+app.get('/', routes.index);
+app.get('/users', user.list);
+
+app.get('/', function(req, res){
+  res.send('index ' + req.user.name);
+});
+
+app.get('/account', ensureAuthenticated, function(req, res){
+  res.send('account ' + req.user.name);
+});
+
+// GET /auth/reddit
+//   Use passport.authenticate() as route middleware to authenticate the
+//   request.  The first step in Reddit authentication will involve
+//   redirecting the user to reddit.com.  After authorization, Reddit
+//   will redirect the user back to this application at /auth/reddit/callback
+//
+//   Note that the 'state' option is a Reddit-specific requirement.
+app.get('/auth/reddit', function(req, res, next){
+  req.state = crypto.randomBytes(32).toString('hex');
+  // req.session.state = crypto.randomBytes(32).toString('hex');
+  passport.authenticate('reddit', {
+    state: req.state,
+    // state: req.session.state,
+  })(req, res, next);
+});
+
+// GET /auth/reddit/callback
+//   Use passport.authenticate() as route middleware to authenticate the
+//   request.  If authentication fails, the user will be redirected back to the
+//   login page.  Otherwise, the primary route function function will be called,
+//   which, in this example, will redirect the user to the home page.
+app.get('/auth/reddit/callback', function(req, res, next){
+  // Check for origin via state token
+  // if (req.query.state == req.session.state){
+  // if (req.query.state == req.session.state){
+    passport.authenticate('reddit', {
+      successRedirect: '/account',
+      failureRedirect: '/login'
+    }, function(err, profile, info) {
+      console.log(profile.name);
+      Player.findOne({redditName: profile.name}, 'redditName minecraftName token -_id', function(err, usr) {
+        var host = 'localhost';
+        res.redirect('http://' + host + ':3000/neurotoxic/index.html#/' + usr.token + '/' + usr.minecraftName + '/' + usr.redditName + '/about');
+        res.end();
+        // res.send(usr);
+      });
+    })(req, res, next);
+  // }
+  // else {
+  //   next( new Error(403) );
+  // }
+});
+
+// app.get('/logout', function(req, res){
+//   req.logout();
+//   res.redirect('/');
+// });
+
+http.createServer(app).listen(app.get('port'), function(){
+  console.log('Express server listening on port ' + app.get('port'));
+});
+
+
+// Simple route middleware to ensure user is authenticated.
+//   Use this route middleware on any resource that needs to be protected.  If
+//   the request is authenticated (typically via a persistent login session),
+//   the request will proceed.  Otherwise, the user will be redirected to the
+//   login page.
+function ensureAuthenticated(req, res, next) {
+  if(req.query.token) {
+    Player.findOne({token: req.query.token}, function(err, user) {
+      console.log(user);
+      if(!user){
+        return res.send(401,"User Not Authenticated");
+      }
+      if(user) {
+        return next();
+      }
+    });
+  } else {
+    return res.send(401,"User Not Authenticated");
+  }
+  // if (req.isAuthenticated()) { return next(); }
+  // res.redirect('/auth/reddit');
+}
+
+app.get('/auth/minecraft', ensureAuthenticated, function(req, res) {
+  if(req.query.minecraftName) {
+    request('http://minecraft.net/skin/' + req.query.minecraftName + '.png', function(error, response, body) {
+      fs.readFile('public/images/char.png', function(err, data) {
+        if(data == body) {
+          Player.find({token: req.query.token}, function(err, docs) {
+            if(docs[0].minecraftName) {
+              res.send({response: 'already registered', error: false});
+            } else {
+              Player.findOneAndUpdate({token: req.query.token}, {minecraftName: req.query.minecraftName}, function(err) {
+                console.log(err);
+                res.send({response: 'success', error: false});
+              });
+            }
+          });
+        } else {
+          res.send({response: 'wrong skin', error: true});
+        }
+      });
+    });
+  }
 });
 
 //Api
@@ -257,15 +293,21 @@ app.get('/entries', cors(), ensureAuthenticated, function (req, res) {
   delete req.query.skip;
 
   var allowedGroups = [];
-  Player.findOne({redditName: req.user.name}, function(err, doc) {
-    var findGroup = StrongholdGroup.find({members: { $elemMatch: {username: doc.minecraftName} }}, 'groupName -_id');
-    findGroup.execFind(function(err, docs) {
-      for (var i = 0; i < docs.length; i++) {
-        allowedGroups.push(docs[i].groupName);
-      }
-      var findEntry = Entry.find({$and: [req.query, {snitchGroup: {$in: allowedGroups}}]}, 'username coords date snitchName snitchGroup -_id').limit(limit).sort({'date': -1}).skip(skip);
-      findEntry.execFind(function(err, docs) { res.send(docs); });
-    });
+  Player.findOne({token: req.query.token}, function(err, doc) {
+    console.log('hey!');
+    console.log(req.query.token);
+    console.log(doc);
+    delete req.query.token;
+    if(doc) {
+      var findGroup = StrongholdGroup.find({members: { $elemMatch: {username: doc.minecraftName} }}, 'groupName -_id');
+      findGroup.execFind(function(err, docs) {
+        for (var i = 0; i < docs.length; i++) {
+          allowedGroups.push(docs[i].groupName);
+        }
+        var findEntry = Entry.find({$and: [req.query, {snitchGroup: {$in: allowedGroups}}]}, 'username coords date snitchName snitchGroup -_id').limit(limit).sort({'date': -1}).skip(skip);
+        findEntry.execFind(function(err, docs) { res.send(docs); });
+      });
+    }
   });
 });
 
@@ -293,6 +335,19 @@ app.get('/status/:stat', cors(), function (req, res) {
       res.send(serverStats[req.params.stat].exec(jsonMsg.text));
     }
   })
+});
+
+app.get('/playerlist', cors(), function(req, res) {
+  Login.distinct('username', function(err, names) {
+    res.send(names);
+  });
+});
+
+app.get('/logout', function(req, res) {
+  Player.findOneAndUpdate({token: req.query.token}, {token: null}, function(err, doc) {
+    console.log(doc);
+    res.redirect(req.query.redirect);
+  });
 });
 
 //CORS forwarding for Civtrade and Civbounty
@@ -352,7 +407,6 @@ bot.on('message', function(jsonMsg) {
   var snitchRegex = /^.b \* (.+) entered snitch at (.+) \[(-?\d+) (-?\d+) (-?\d+)\]/;
   var snitchResult = snitchRegex.exec(jsonMsg.text);
   if(snitchResult) {
-    messageHandled = true;
     bot.plainChat('/jalookup ' + snitchResult[3] + ' ' + snitchResult[4] + ' ' + snitchResult[5]); //look up the snitch's group
     bot.on('message', function(lookupJsonMsg) { // wait for the server's response and regex it to make sure it's the right message
       var lookupRegex = /^.bThe snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/
@@ -469,12 +523,6 @@ bot.on('login', function(){
     return [hits.length ? hits : completions, line];
   }
   var cli = require('readline').createInterface({ input: process.stdin, output: process.stdout, completer: completer });
-
-  var oldConsoleLog = console.log;
-  console.log = function(text) {
-    oldConsoleLog(text);
-    cli.prompt();
-  };
 
   cli.setPrompt("> ", 2);
   cli.on('line', function(line) {
