@@ -19,6 +19,7 @@ var mongoose = require('mongoose');
 var findOrCreate = require('mongoose-findorcreate');
 var mineflayer = require('mineflayer');
 var vec3 = mineflayer.vec3;
+var radarPlugin = require('mineflayer-radar')(mineflayer);
 
 var config = require('configurizer').getVariables();
 var app = express();
@@ -579,4 +580,5 @@ function bindBotEvents() {
   //     // bot.dig(bot.blockAt(obbyGen.end1), function(err) {console.log(err)});
   //   }, 2000);
   // });
+  radarPlugin(bot, config.radar);
 }
