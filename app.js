@@ -29,6 +29,7 @@ var bot = mineflayer.createBot({
   username: config.username,
   password: config.password
 });
+bindBotEvents();
 
 var express = require('express')
   , passport = require('passport')
@@ -376,188 +377,201 @@ app.get('/perpetrators', cors(), function(req, res) { //Kept for compatibility, 
 });
 
 //Bot
-bot.on('spawn', function() {
-  console.log('connected');
-});
-
-bot.on('playerJoined', function (player) {
-  console.log(player.username + " has joined.");
-  Login.create({ username: player.username}, function(err) {
-    if (err) {
-      console.log(err);
-    }
+function bindBotEvents() {
+  bot.on('spawn', function() {
+    console.log('connected');
   });
-});
 
-bot.on('playerLeft', function (player) {
-  console.log(player.username + " has left.");
-  Login.create({ username: player.username, logout: true }, function(err) {
-    if (err) {
-      console.log(err);
-    }
-  });
-});
-
-function getRandomInt (min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-bot.on('message', function(jsonMsg) {
-  messageHandled = false;
-  var snitchRegex = /^.b \* (.+) entered snitch at (.+) \[(-?\d+) (-?\d+) (-?\d+)\]/;
-  var snitchResult = snitchRegex.exec(jsonMsg.text);
-  if(snitchResult) {
-    bot.plainChat('/jalookup ' + snitchResult[3] + ' ' + snitchResult[4] + ' ' + snitchResult[5]); //look up the snitch's group
-    bot.on('message', function(lookupJsonMsg) { // wait for the server's response and regex it to make sure it's the right message
-      var lookupRegex = /^.bThe snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/
-      var lResult = lookupRegex.exec(lookupJsonMsg.text);
-      if (lResult) {
-        messageHandled = true;
-        if(lResult[1] === snitchResult[3] && lResult[2] === snitchResult[4] && lResult[3] === snitchResult[5]) {
-          Entry.create({
-            username: snitchResult[1],
-            snitchName: snitchResult[2],
-            coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}],
-            snitchGroup: lResult[4]
-          }, function(err, doc) {
-            console.log('Snitch saving error: ' + err);
-          });
-        }
+  bot.on('playerJoined', function (player) {
+    console.log(player.username + " has joined.");
+    Login.create({ username: player.username}, function(err) {
+      if (err) {
+        console.log(err);
       }
     });
+  });
+
+  bot.on('playerLeft', function (player) {
+    console.log(player.username + " has left.");
+    Login.create({ username: player.username, logout: true }, function(err) {
+      if (err) {
+        console.log(err);
+      }
+    });
+  });
+
+  function getRandomInt (min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  var snitchTransferRegex = /^.dFrom ([A-Za-z_]+).d: :st snitchTransfer (.+)/;
-  var snitchTransferResult = snitchTransferRegex.exec(jsonMsg.text);
-  if(snitchTransferResult) {
-    var findGroup= StrongholdGroup.find({groupName: snitchTransferResult[2].toLowerCase()}, 'groupName groupType members -_id');
-    findGroup.execFind(function(err, docs) {
-      if(docs[0]) {
-        bot.plainChat('/tell ' + snitchTransferResult[1] + ' Error: The group is already registered');
-      } else {
-        bot.plainChat('/ctgstats ' + snitchTransferResult[2]);
-        if(!docs[0]) {
-          memberObjects = [];
-          bot.on('message', function(ctgMsg) {
-            var ownershipRegex = /^Admin: (.+)/;
-            var moderatorRegex = /^Moderators: (.*)/
-            var memberRegex = /^Members: (.*)/;
-            var botIsOwner = null;
-            var botIsModerator = null;
-            if(ownershipRegex.exec(ctgMsg.text)) {
-              var owner = ownershipRegex.exec(ctgMsg.text)[1].toLowerCase();
-              memberObjects.push({ username: owner, permissionLevel: 'owner'});
-            }
-            var moderators = [];
-            if(moderatorRegex.exec(ctgMsg.text)) {
-              var moderators = moderatorRegex.exec(ctgMsg.text)[1].split(', ');
-              for (var i = 0; i < moderators.length; i++) {
-                if(moderators[i].toLowerCase() === owner) {
-                } else {
-                  memberObjects.push({ username: moderators[i].toLowerCase(), permissionLevel: 'moderator'});
+  bot.on('message', function(jsonMsg) {
+    messageHandled = false;
+    var snitchRegex = /^.b \* (.+) entered snitch at (.+) \[(-?\d+) (-?\d+) (-?\d+)\]/;
+    var snitchResult = snitchRegex.exec(jsonMsg.text);
+    if(snitchResult) {
+      bot.plainChat('/jalookup ' + snitchResult[3] + ' ' + snitchResult[4] + ' ' + snitchResult[5]); //look up the snitch's group
+      bot.once('message', function(lookupJsonMsg) { // wait for the server's response and regex it to make sure it's the right message
+        var lookupRegex = /^.bThe snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/
+        var lResult = lookupRegex.exec(lookupJsonMsg.text);
+        if (lResult) {
+          messageHandled = true;
+          if(lResult[1] === snitchResult[3] && lResult[2] === snitchResult[4] && lResult[3] === snitchResult[5]) {
+            Entry.create({
+              username: snitchResult[1],
+              snitchName: snitchResult[2],
+              coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}],
+              snitchGroup: lResult[4]
+            }, function(err, doc) {
+              if(err) {
+                console.log('Snitch saving error: ' + err);
+              }
+            });
+          }
+        }
+      });
+    }
+
+    var snitchTransferRegex = /^.dFrom ([A-Za-z_]+).d: :st snitchTransfer (.+)/;
+    var snitchTransferResult = snitchTransferRegex.exec(jsonMsg.text);
+    if(snitchTransferResult) {
+      var findGroup= StrongholdGroup.find({groupName: snitchTransferResult[2].toLowerCase()}, 'groupName groupType members -_id');
+      findGroup.execFind(function(err, docs) {
+        if(docs[0]) {
+          bot.plainChat('/tell ' + snitchTransferResult[1] + ' Error: The group is already registered');
+        } else {
+          bot.plainChat('/ctgstats ' + snitchTransferResult[2]);
+          if(!docs[0]) {
+            memberObjects = [];
+            bot.on('message', function(ctgMsg) {
+              var ownershipRegex = /^Admin: (.+)/;
+              var moderatorRegex = /^Moderators: (.*)/
+              var memberRegex = /^Members: (.*)/;
+              var botIsOwner = null;
+              var botIsModerator = null;
+              if(ownershipRegex.exec(ctgMsg.text)) {
+                var owner = ownershipRegex.exec(ctgMsg.text)[1].toLowerCase();
+                memberObjects.push({ username: owner, permissionLevel: 'owner'});
+              }
+              var moderators = [];
+              if(moderatorRegex.exec(ctgMsg.text)) {
+                var moderators = moderatorRegex.exec(ctgMsg.text)[1].split(', ');
+                for (var i = 0; i < moderators.length; i++) {
+                  if(moderators[i].toLowerCase() === owner) {
+                  } else {
+                    memberObjects.push({ username: moderators[i].toLowerCase(), permissionLevel: 'moderator'});
+                  }
                 }
               }
-            }
-            if(memberRegex.exec(ctgMsg.text)) {
-              var members = memberRegex.exec(ctgMsg.text)[1].split(', ');
-              for (var i = 0; i < members.length; i++) {
-                memberObjects.push({ username: members[i].toLowerCase(), permissionLevel: 'member'});
+              if(memberRegex.exec(ctgMsg.text)) {
+                var members = memberRegex.exec(ctgMsg.text)[1].split(', ');
+                for (var i = 0; i < members.length; i++) {
+                  memberObjects.push({ username: members[i].toLowerCase(), permissionLevel: 'member'});
+                }
+                StrongholdGroup.create({groupName: snitchTransferResult[2], groupType: 'snitch', members: memberObjects}, {upsert: true}, function(err, doc) {
+                  console.log(err);
+                  console.log(doc);
+                  return
+                });
               }
-              StrongholdGroup.create({groupName: snitchTransferResult[2], groupType: 'snitch', members: memberObjects}, {upsert: true}, function(err, doc) {
-                console.log(err);
-                console.log(doc);
-                return
-              });
-            }
-            messageHandled = true;
-            if(ownershipRegex.exec(ctgMsg.text)) {
-            }
-          });
+              messageHandled = true;
+              if(ownershipRegex.exec(ctgMsg.text)) {
+              }
+            });
+          }
         }
-      }
-    });
-  }
-
-  if(/^.dTo .+.d: .+$/.exec(jsonMsg.text)) {
-    messageHandled = true;
-  }
-
-  var messageFromSomeoneRegex = /^.dFrom (.+).d: (.+)/;
-  if(messageFromSomeoneRegex.exec(jsonMsg.text)) {
-    messageHandled = true;
-    console.log('From ' + messageFromSomeoneRegex.exec(jsonMsg.text)[1] + ': ' + messageFromSomeoneRegex.exec(jsonMsg.text)[2]);
-  }
-
-  var publicChatRegex = /^.f.f(.+).f: (.+)/;
-  if(publicChatRegex.exec(jsonMsg.text)) {
-    messageHandled = true;
-    if(publicChatRegex.exec(jsonMsg.text)[1] === bot.username) {
-      return
-    } else {
-      console.log(publicChatRegex.exec(jsonMsg.text)[1] + ': ' + publicChatRegex.exec(jsonMsg.text)[2]);
+      });
     }
-  }
 
-  if(!messageHandled) {
-    console.log(jsonMsg.text);
-  }
+    if(/^.dTo .+.d: .+$/.exec(jsonMsg.text)) {
+      messageHandled = true;
+    }
 
-});
+    var messageFromSomeoneRegex = /^.dFrom (.+).d: (.+)/;
+    if(messageFromSomeoneRegex.exec(jsonMsg.text)) {
+      messageHandled = true;
+      console.log('From ' + messageFromSomeoneRegex.exec(jsonMsg.text)[1] + ': ' + messageFromSomeoneRegex.exec(jsonMsg.text)[2]);
+    }
 
-bot.on('login', function(){
-  // bot.plainChat('/cttransfer jukeTest fwhiffahder');
-  setInterval(function(){
+    var publicChatRegex = /^.f.f(.+).f: (.+)/;
+    if(publicChatRegex.exec(jsonMsg.text)) {
+      messageHandled = true;
+      if(publicChatRegex.exec(jsonMsg.text)[1] === bot.username) {
+        return
+      } else {
+        console.log(publicChatRegex.exec(jsonMsg.text)[1] + ': ' + publicChatRegex.exec(jsonMsg.text)[2]);
+      }
+    }
+
+    if(!messageHandled) {
+      console.log(jsonMsg.text);
+    }
+
+  });
+
+  bot.on('login', function(){
+    // bot.plainChat('/cttransfer jukeTest fwhiffahder');
+    setInterval(function(){
       var yaw = Math.floor(Math.random() * 360);
       var pitch = Math.floor(Math.random() * 360);
       bot.look(yaw, pitch, true);
     }, 2000);
-  
+    
 
-  //Cli
-  function completer(line) {
-    var completions = [];
-    for (var i in bot.players) {
-      completions.push(bot.players[i].username);
+    //Cli
+    function completer(line) {
+      var completions = [];
+      for (var i in bot.players) {
+        completions.push(bot.players[i].username);
+      }
+      var hits = completions.filter(function(c) { return c.indexOf(line) == 0 });
+      return [hits.length ? hits : completions, line];
     }
-    var hits = completions.filter(function(c) { return c.indexOf(line) == 0 });
-    return [hits.length ? hits : completions, line];
-  }
-  var cli = require('readline').createInterface({ input: process.stdin, output: process.stdout, completer: completer });
+    var cli = require('readline').createInterface({ input: process.stdin, output: process.stdout, completer: completer });
 
-  cli.setPrompt("> ", 2);
-  cli.on('line', function(line) {
-    bot.plainChat(line);
-    cli.prompt();
+    cli.setPrompt("> ", 2);
+    cli.on('line', function(line) {
+      bot.plainChat(line);
+      cli.prompt();
+    });
+    function fixStdoutFor(cli) {
+      var oldStdout = process.stdout;
+      var newStdout = Object.create(oldStdout);
+      newStdout.write = function() {
+        cli.output.write('\x1b[2K\r');
+        var result = oldStdout.write.apply(
+          this,
+          Array.prototype.slice.call(arguments)
+        );
+        cli._refreshLine();
+        return result;
+      }
+      process.__defineGetter__('stdout', function() { return newStdout; });
+    };
+    fixStdoutFor(cli);
+    cli.prompt()
   });
-  function fixStdoutFor(cli) {
-    var oldStdout = process.stdout;
-    var newStdout = Object.create(oldStdout);
-    newStdout.write = function() {
-      cli.output.write('\x1b[2K\r');
-      var result = oldStdout.write.apply(
-        this,
-        Array.prototype.slice.call(arguments)
-      );
-      cli._refreshLine();
-      return result;
-    }
-    process.__defineGetter__('stdout', function() { return newStdout; });
-  };
-  fixStdoutFor(cli);
-  cli.prompt()
-});
 
-bot.on('kicked', function(reason) {
-  console.log('Kicked with reason: ' + reason);
-});
-// bot.on('spawn', function() {
-//   var obbyGen = {
-//     button: vec3(-6437, 70, -5009),
-//     end1: vec3(-6437, 68, -5007)
-//   }
-//   setTimeout(function() {
-//     // bot.activateBlock(bot.blockAt(obbyGen.button));
-//     bot.placeBlock(bot.blockAt(obbyGen.end1), vec3(0, 1, 0));
-//     // bot.dig(bot.blockAt(obbyGen.end1), function(err) {console.log(err)});
-//   }, 2000);
-// });
+  bot.on('kicked', function(reason) {
+    console.log('Kicked with reason: ' + reason);
+    setTimeout(function() {
+      bot = mineflayer.createBot({
+        host: config.host,
+        port: config.port,
+        username: config.username,
+        password: config.password
+      });
+      bindBotEvents();
+    }, 15000);
+  });
+  // bot.on('spawn', function() {
+  //   var obbyGen = {
+  //     button: vec3(-6437, 70, -5009),
+  //     end1: vec3(-6437, 68, -5007)
+  //   }
+  //   setTimeout(function() {
+  //     // bot.activateBlock(bot.blockAt(obbyGen.button));
+  //     bot.placeBlock(bot.blockAt(obbyGen.end1), vec3(0, 1, 0));
+  //     // bot.dig(bot.blockAt(obbyGen.end1), function(err) {console.log(err)});
+  //   }, 2000);
+  // });
+}
