@@ -351,6 +351,12 @@ app.get('/logout', function(req, res) {
   });
 });
 
+app.get('/player', function(req, res) {
+  Player.findOne(req.query, '-token -_id -__v', function(err, doc) {
+    res.send(doc);
+  });
+});
+
 //CORS forwarding for Civtrade and Civbounty
 
 app.get('/civtrade/shops', cors(), function(req, res) { //Civtrade
