@@ -559,6 +559,8 @@ function bindBotEvents() {
 
   bot.on('kicked', function(reason) {
     console.log('Kicked with reason: ' + reason);
+  });
+  bot.on('end', function() {
     setTimeout(function() {
       bot = mineflayer.createBot({
         host: config.host,
