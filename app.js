@@ -255,7 +255,7 @@ app.get('/auth/minecraft', ensureAuthenticated, function(req, res) {
             if(docs[0].minecraftName) {
               res.send({response: 'already registered', error: false});
             } else {
-              Player.findOneAndUpdate({token: req.query.token}, {minecraftName: req.query.minecraftName}, function(err) {
+              Player.findOneAndUpdate({token: req.query.token}, {minecraftName: req.query.minecraftName.toLowerCase()}, function(err) {
                 console.log(err);
                 res.send({response: 'success', error: false});
               });
