@@ -105,7 +105,7 @@ mongoose.connection.once('connected', function() {
 passport.use(new RedditStrategy({
     clientID: config.redditConsumerKey,
     clientSecret: config.redditConsumerSecret,
-    callbackURL: "http://localhost:3000/auth/reddit/callback"
+    callbackURL: config.redditCallbackUrl
   },
   function(accessToken, refreshToken, profile, done) {
     Player.findOrCreate({redditName: profile.name}, function(err, usr) {
@@ -201,8 +201,7 @@ app.get('/auth/reddit/callback', function(req, res, next){
     }, function(err, profile, info) {
       console.log(profile.name);
       Player.findOne({redditName: profile.name}, 'redditName minecraftName token -_id', function(err, usr) {
-        var host = 'localhost';
-        res.redirect('http://' + host + ':3000/neurotoxic/index.html#/' + usr.token + '/' + usr.minecraftName + '/' + usr.redditName + '/about');
+        res.redirect('http://fwhiffahder.github.io/neurotoxic/index.html#/' + usr.token + '/' + usr.minecraftName + '/' + usr.redditName + '/about');
         res.end();
         // res.send(usr);
       });
@@ -412,7 +411,7 @@ function bindBotEvents() {
 
   bot.on('message', function(jsonMsg) {
     messageHandled = false;
-    var snitchRegex = /^.b \* (.+) entered snitch at (.+) \[(-?\d+) (-?\d+) (-?\d+)\]/;
+    var snitchRegex = /^.b \* (.+) entered snitch at (.*) \[(-?\d+) (-?\d+) (-?\d+)\]/;
     var snitchResult = snitchRegex.exec(jsonMsg.text);
     if(snitchResult) {
       bot.plainChat('/jalookup ' + snitchResult[3] + ' ' + snitchResult[4] + ' ' + snitchResult[5]); //look up the snitch's group
