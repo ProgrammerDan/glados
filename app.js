@@ -418,7 +418,6 @@ function bindBotEvents() {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  var jalisting;
   bot.on('message', function(jsonMsg) {
     messageHandled = false;
     var snitchRegex = /^.b \* (.+) entered snitch at (.*) \[(-?\d+) (-?\d+) (-?\d+)\]/;
@@ -495,27 +494,9 @@ function bindBotEvents() {
       var jalistPageRegex = /^.8 \* Page (\d+) ------------------------------------------/;
       var jalistPageResult = jalistPageRegex.exec(jalistArray[i]);
       if(jalistPageResult) {
-        var jalisting = true;
-        // console.log('0sec');
-        // console.log(jalisting);
-        // console.log('0sec');
-        setTimeout(function() {
-          var jalisting = false;
-          // console.log('4sec');
-          // console.log(jalisting);
-          // console.log('4sec');
-        }, 4000);
         var number = + jalistPageResult[1] + 1;
         setTimeout(function() {
-          // console.log('5sec');
-          // console.log(jalisting);
-          // console.log('5sec');
-          if(jalisting) {
-            // console.log('listing');
-          } else {
-            // console.log('notlisting');
-            bot.plainChat('/jalist ' + number);
-          }
+          bot.plainChat('/jalist ' + number);
         }, 5000);
       }
     }
