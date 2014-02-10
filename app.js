@@ -56,6 +56,14 @@ var entrySchema = new Schema({
   snitchGroup: String
 });
 var Entry = db.model('Entry', entrySchema);
+var snitchSchema = new Schema({
+  // cullDate: Date,
+  coords: [{x: Number, y: Number, z: Number}],
+  snitchName: String,
+  snitchGroup: String,
+});
+snitchSchema.plugin(findOrCreate);
+var Snitch = db.model('Snitch', snitchSchema);
 var strongholdGroupMemberSchema = new Schema({
   username: String,
   permissionLevel: String
@@ -410,31 +418,106 @@ function bindBotEvents() {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
+  var jalisting;
   bot.on('message', function(jsonMsg) {
     messageHandled = false;
     var snitchRegex = /^.b \* (.+) entered snitch at (.*) \[(-?\d+) (-?\d+) (-?\d+)\]/;
     var snitchResult = snitchRegex.exec(jsonMsg.text);
     if(snitchResult) {
-      bot.plainChat('/jalookup ' + snitchResult[3] + ' ' + snitchResult[4] + ' ' + snitchResult[5]); //look up the snitch's group
-      bot.once('message', function(lookupJsonMsg) { // wait for the server's response and regex it to make sure it's the right message
-        var lookupRegex = /^.bThe snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/
-        var lResult = lookupRegex.exec(lookupJsonMsg.text);
-        if (lResult) {
-          messageHandled = true;
-          if(lResult[1] === snitchResult[3] && lResult[2] === snitchResult[4] && lResult[3] === snitchResult[5]) {
-            Entry.create({
-              username: snitchResult[1],
-              snitchName: snitchResult[2],
-              coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}],
-              snitchGroup: lResult[4]
-            }, function(err, doc) {
-              if(err) {
-                console.log('Snitch saving error: ' + err);
+      Snitch.findOne({'coords.0.x': snitchResult[3], 'coords.0.y': snitchResult[4], 'coords.0.z': snitchResult[5]}, function(err, doc) {
+        if(doc) {
+          // console.log('docky');
+          // console.log(doc);
+          doc.snitchName = snitchResult[2];
+          doc.save();
+          Entry.create({
+            username: snitchResult[1],
+            coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}],
+            snitchName: snitchResult[2],
+            snitchGroup: doc.snitchGroup
+          }, function(err, entryDoc) {
+            if(err) {
+              console.log('Snitch saving error: ' + err);
+            }
+          });
+        } else {
+          // console.log('look up');
+          bot.plainChat('/jalookup ' + snitchResult[3] + ' ' + snitchResult[4] + ' ' + snitchResult[5]); //look up the snitch's group
+          bot.once('message', function(lookupJsonMsg) { // wait for the server's response and regex it to make sure it's the right message
+            setTimeout(function() {
+              bot.plainChat('/jalist');
+            }, 2000);
+            var lookupRegex = /^.bThe snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/
+            var lResult = lookupRegex.exec(lookupJsonMsg.text);
+            if (lResult) {
+              messageHandled = true;
+              if(lResult[1] === snitchResult[3] && lResult[2] === snitchResult[4] && lResult[3] === snitchResult[5]) {
+                Entry.create({
+                  username: snitchResult[1],
+                  snitchName: snitchResult[2],
+                  coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}],
+                  snitchGroup: lResult[4]
+                }, function(err, doc) {
+                  if(err) {
+                    console.log('Snitch saving error: ' + err);
+                  }
+                });
               }
-            });
-          }
+            }
+          });
         }
       });
+
+    }
+    var jalistRegex = /^.f[^A-Za-z0-9_]?f?  world    \[(.+) (.+) (.+)\]         (.+)      ([^ ]+)\s*/;
+    var jalistArray = jsonMsg.text.split('\n');
+    for(var i = 2; i < jalistArray.length; i++) {
+      var jalistResult = jalistRegex.exec(jalistArray[i]);
+      if(jalistResult) {
+        // var snitch = {
+        //   coords: [{x: jalistResult[1], y: jalistResult[2], z: jalistResult[3]}],
+        //   snitchGroup: jalistResult[5]
+        // };
+        var snitch = {'coords.0.x': +jalistResult[1], 'coords.0.y': +jalistResult[2], 'coords.0.z': +jalistResult[3], snitchGroup: jalistResult[5]};
+        // console.log([ +jalistResult[1], +jalistResult[2], +jalistResult[3]]);
+        Snitch.findOneAndUpdate({'coords.0.x': +jalistResult[1], 'coords.0.y': +jalistResult[2], 'coords.0.z': +jalistResult[3], snitchGroup: jalistResult[5]}, {coords: [{x: +jalistResult[1], y: +jalistResult[2], z: +jalistResult[3]}], snitchGroup: jalistResult[5]}, {upsert: true}, function(err, doc) {
+        // Snitch.findOne({'coords.0.x': -4192}, function(err, doc) {
+          if(doc) {
+            // console.log('found');
+            // console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+            // console.log(doc);
+            // console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+          } else {
+            // console.log('nerp');
+          }
+        });
+      }
+      var jalistPageRegex = /^.8 \* Page (\d+) ------------------------------------------/;
+      var jalistPageResult = jalistPageRegex.exec(jalistArray[i]);
+      if(jalistPageResult) {
+        var jalisting = true;
+        // console.log('0sec');
+        // console.log(jalisting);
+        // console.log('0sec');
+        setTimeout(function() {
+          var jalisting = false;
+          // console.log('4sec');
+          // console.log(jalisting);
+          // console.log('4sec');
+        }, 4000);
+        var number = + jalistPageResult[1] + 1;
+        setTimeout(function() {
+          // console.log('5sec');
+          // console.log(jalisting);
+          // console.log('5sec');
+          if(jalisting) {
+            // console.log('listing');
+          } else {
+            // console.log('notlisting');
+            bot.plainChat('/jalist ' + number);
+          }
+        }, 5000);
+      }
     }
 
     var snitchTransferRegex = /^.dFrom ([A-Za-z_]+).d: :st snitchTransfer (.+)/;
@@ -517,9 +600,11 @@ function bindBotEvents() {
   bot.on('login', function(){
     // bot.plainChat('/cttransfer jukeTest fwhiffahder');
     setInterval(function(){
-      var yaw = Math.floor(Math.random() * 360);
-      var pitch = Math.floor(Math.random() * 360);
-      bot.look(yaw, pitch, true);
+      if(bot) {
+        var yaw = Math.floor(Math.random() * 360);
+        var pitch = Math.floor(Math.random() * 360);
+        bot.look(yaw, pitch, true);
+      }
     }, 2000);
     
 
@@ -561,6 +646,7 @@ function bindBotEvents() {
     console.log('Kicked with reason: ' + reason);
   });
   bot.on('end', function() {
+    bot = null;
     setTimeout(function() {
       bot = mineflayer.createBot({
         host: config.host,
