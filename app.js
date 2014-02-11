@@ -320,19 +320,18 @@ app.get('/entries', cors(), ensureAuthenticated, function (req, res) {
   });
 });
 
+var serverStats = {
+  time: /^.8    Time since last restart: .6(\d+).8 W, .6(\d+).8 D, .6(\d+).8 H, .6(\d+).8 M, .6(\d+).8 S/,
+  memory: /^.8    Free allocated memory: .6(\d+).8 MB \((\d+)%\)/,
+  serverLogSize: /^.8    Server log size: .6(\d+) bytes \((\d+) MB\)/,
+  freeDisk: /^.8    Free disk size: .6(\d+) MB/,
+  currentWorldSize: /^.8    Current world size: .6(\d+) MB/,
+  loadedChunks: /^.8    Loaded chunks in this world: .6(\d+)/,
+  livingEntities: /^.8    Living entities in this world: .6(\d+)/,
+  tps: /^.8    TPS: .6(\d+\.\d+)/,
+  getQueueSize: /^(\d+) players are in the queue./
+}
 app.get('/status/:stat', cors(), function (req, res) {
-  var serverStats = {
-    time: /^.8    Time since last restart: .6(\d+).8 W, .6(\d+).8 D, .6(\d+).8 H, .6(\d+).8 M, .6(\d+).8 S/,
-    memory: /^.8    Free allocated memory: .6(\d+).8 MB \((\d+)%\)/,
-    serverLogSize: /^.8    Server log size: .6(\d+) bytes \((\d+) MB\)/,
-    freeDisk: /^.8    Free disk size: .6(\d+) MB/,
-    currentWorldSize: /^.8    Current world size: .6(\d+) MB/,
-    loadedChunks: /^.8    Loaded chunks in this world: .6(\d+)/,
-    livingEntities: /^.8    Living entities in this world: .6(\d+)/,
-    tps: /^.8    TPS: .6(\d+\.\d+)/,
-    getQueueSize: /^(\d+) players are in the queue./
-  }
-
   if (req.params.stat === 'getQueueSize') {
     bot.plainChat('/gqs');
   } else {
@@ -343,7 +342,25 @@ app.get('/status/:stat', cors(), function (req, res) {
       messageHandled = true;
       res.send(serverStats[req.params.stat].exec(jsonMsg.text));
     }
-  })
+  });
+});
+
+app.get('/status', cors(), function (req, res) {
+  var stats = new Object;
+  bot.plainChat('/gqs');
+  setTimeout(function() {
+    bot.plainChat('/ss');
+  }, 1000);
+  bot.on('message', function(jsonMsg) {
+    for(var i in serverStats) {
+      if(serverStats[i].exec(jsonMsg.text)) {
+        stats[i] = serverStats[i].exec(jsonMsg.text);
+      }
+    }
+  });
+  setTimeout(function() {
+    res.send(stats);
+  }, 3000);
 });
 
 app.get('/playerlist', cors(), function(req, res) {
