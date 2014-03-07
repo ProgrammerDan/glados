@@ -17,9 +17,8 @@ var crypto = require('crypto');
 var RedditStrategy = require('passport-reddit').Strategy;
 var mongoose = require('mongoose');
 var findOrCreate = require('mongoose-findorcreate');
-var mineflayer = require('mineflayer');
+var mineflayer = require('./bot-glue.js');
 var vec3 = mineflayer.vec3;
-var radarPlugin = require('mineflayer-radar')(mineflayer);
 
 var config = require('configurizer').getVariables();
 var app = express();
@@ -39,7 +38,7 @@ var express = require('express')
   , RedditStrategy = require('passport-reddit').Strategy;
 
 //Database
-var db = mongoose.connect('mongodb://localhost/glados');
+var db = mongoose.connect('mongodb://127.0.0.1/glados');
 var Schema = mongoose.Schema;
 
 var loginSchema = new Schema({
@@ -321,14 +320,14 @@ app.get('/entries', cors(), ensureAuthenticated, function (req, res) {
 });
 
 var serverStats = {
-  time: /^.8    Time since last restart: .6(\d+).8 W, .6(\d+).8 D, .6(\d+).8 H, .6(\d+).8 M, .6(\d+).8 S/,
-  memory: /^.8    Free allocated memory: .6(\d+).8 MB \((\d+)%\)/,
-  serverLogSize: /^.8    Server log size: .6(\d+) bytes \((\d+) MB\)/,
-  freeDisk: /^.8    Free disk size: .6(\d+) MB/,
-  currentWorldSize: /^.8    Current world size: .6(\d+) MB/,
-  loadedChunks: /^.8    Loaded chunks in this world: .6(\d+)/,
-  livingEntities: /^.8    Living entities in this world: .6(\d+)/,
-  tps: /^.8    TPS: .6(\d+\.\d+)/,
+  time: /    Time since last restart: (\d+) W, (\d+) D, (\d+) H, (\d+) M, (\d+) S/,
+  memory: /    Free allocated memory: (\d+) MB \((\d+)%\)/,
+  serverLogSize: /    Server log size: (\d+) bytes \((\d+) MB\)/,
+  freeDisk: /    Free disk size: (\d+) MB/,
+  currentWorldSize: /    Current world size: (\d+) MB/,
+  loadedChunks: /    Loaded chunks in this world: (\d+)/,
+  livingEntities: /    Living entities in this world: (\d+)/,
+  tps: /    TPS: (\d+\d+)/,
   getQueueSize: /^(\d+) players are in the queue./
 }
 app.get('/status/:stat', cors(), function (req, res) {
@@ -339,7 +338,7 @@ app.get('/status/:stat', cors(), function (req, res) {
   }
   bot.on('message', function(jsonMsg) {
     if(serverStats[req.params.stat].exec(jsonMsg.text)) {
-      messageHandled = true;
+      // messageHandled = true;
       res.send(serverStats[req.params.stat].exec(jsonMsg.text));
     }
   });
@@ -436,8 +435,8 @@ function bindBotEvents() {
   }
 
   bot.on('message', function(jsonMsg) {
-    messageHandled = false;
-    var snitchRegex = /^.b \* (.+) entered snitch at (.*) \[(-?\d+) (-?\d+) (-?\d+)\]/;
+    // messageHandled = false;
+    var snitchRegex = / \* (.+) entered snitch at (.*) \[(-?\d+) (-?\d+) (-?\d+)\]/;
     var snitchResult = snitchRegex.exec(jsonMsg.text);
     if(snitchResult) {
       Snitch.findOne({'coords.0.x': snitchResult[3], 'coords.0.y': snitchResult[4], 'coords.0.z': snitchResult[5]}, function(err, doc) {
@@ -463,10 +462,10 @@ function bindBotEvents() {
             setTimeout(function() {
               bot.plainChat('/jalist');
             }, 2000);
-            var lookupRegex = /^.bThe snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/
+            var lookupRegex = /The snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/
             var lResult = lookupRegex.exec(lookupJsonMsg.text);
             if (lResult) {
-              messageHandled = true;
+              // messageHandled = true;
               if(lResult[1] === snitchResult[3] && lResult[2] === snitchResult[4] && lResult[3] === snitchResult[5]) {
                 Entry.create({
                   username: snitchResult[1],
@@ -485,7 +484,7 @@ function bindBotEvents() {
       });
 
     }
-    var jalistRegex = /^.f[^A-Za-z0-9_]?f?  world    \[(.+) (.+) (.+)\]         (.+)      ([^ ]+)\s*/;
+    var jalistRegex = /[^A-Za-z0-9_]?f?  world    \[(.+) (.+) (.+)\]         (.+)      ([^ ]+)\s*/;
     var jalistArray = jsonMsg.text.split('\n');
     for(var i = 2; i < jalistArray.length; i++) {
       var jalistResult = jalistRegex.exec(jalistArray[i]);
@@ -508,7 +507,7 @@ function bindBotEvents() {
           }
         });
       }
-      var jalistPageRegex = /^.8 \* Page (\d+) ------------------------------------------/;
+      var jalistPageRegex = / \* Page (\d+) ------------------------------------------/;
       var jalistPageResult = jalistPageRegex.exec(jalistArray[i]);
       if(jalistPageResult) {
         var number = + jalistPageResult[1] + 1;
@@ -518,7 +517,7 @@ function bindBotEvents() {
       }
     }
 
-    var snitchTransferRegex = /^.dFrom ([A-Za-z_]+).d: :st snitchTransfer (.+)/;
+    var snitchTransferRegex = /From ([A-Za-z_]+): :st snitchTransfer (.+)/;
     var snitchTransferResult = snitchTransferRegex.exec(jsonMsg.text);
     if(snitchTransferResult) {
       var findGroup= StrongholdGroup.find({groupName: snitchTransferResult[2].toLowerCase()}, 'groupName groupType members -_id');
@@ -560,7 +559,7 @@ function bindBotEvents() {
                   return
                 });
               }
-              messageHandled = true;
+              // messageHandled = true;
               if(ownershipRegex.exec(ctgMsg.text)) {
               }
             });
@@ -569,19 +568,19 @@ function bindBotEvents() {
       });
     }
 
-    if(/^.dTo .+.d: .+$/.exec(jsonMsg.text)) {
-      messageHandled = true;
+    if(/To .+: .+$/.exec(jsonMsg.text)) {
+      // messageHandled = true;
     }
 
-    var messageFromSomeoneRegex = /^.dFrom (.+).d: (.+)/;
+    var messageFromSomeoneRegex = /From (.+): (.+)/;
     if(messageFromSomeoneRegex.exec(jsonMsg.text)) {
-      messageHandled = true;
+      // messageHandled = true;
       console.log('From ' + messageFromSomeoneRegex.exec(jsonMsg.text)[1] + ': ' + messageFromSomeoneRegex.exec(jsonMsg.text)[2]);
     }
 
-    var publicChatRegex = /^.f.f(.+).f: (.+)/;
+    var publicChatRegex = /(.+): (.+)/;
     if(publicChatRegex.exec(jsonMsg.text)) {
-      messageHandled = true;
+      // messageHandled = true;
       if(publicChatRegex.exec(jsonMsg.text)[1] === bot.username) {
         return
       } else {
@@ -589,9 +588,9 @@ function bindBotEvents() {
       }
     }
 
-    if(!messageHandled) {
-      console.log(jsonMsg.text);
-    }
+    // if(!messageHandled) {
+    //   console.log(jsonMsg.text);
+    // }
 
   });
 
@@ -599,51 +598,16 @@ function bindBotEvents() {
     // bot.plainChat('/cttransfer jukeTest fwhiffahder');
     setInterval(function(){
       if(bot) {
-        var yaw = Math.floor(Math.random() * 360);
-        var pitch = Math.floor(Math.random() * 360);
-        bot.look(yaw, pitch, true);
+        bot.plainChat('Sorry if this bothers you, trying to avoid AFKPGC.');
+        // var yaw = Math.floor(Math.random() * 360);
+        // var pitch = Math.floor(Math.random() * 360);
+        // bot.look(yaw, pitch, true);
       }
-    }, 2000);
-    
-
-    //Cli
-    function completer(line) {
-      var completions = [];
-      for (var i in bot.players) {
-        completions.push(bot.players[i].username);
-      }
-      var hits = completions.filter(function(c) { return c.indexOf(line) == 0 });
-      return [hits.length ? hits : completions, line];
-    }
-    var cli = require('readline').createInterface({ input: process.stdin, output: process.stdout, completer: completer });
-
-    cli.setPrompt("> ", 2);
-    cli.on('line', function(line) {
-      bot.plainChat(line);
-      cli.prompt();
-    });
-    function fixStdoutFor(cli) {
-      var oldStdout = process.stdout;
-      var newStdout = Object.create(oldStdout);
-      newStdout.write = function() {
-        cli.output.write('\x1b[2K\r');
-        var result = oldStdout.write.apply(
-          this,
-          Array.prototype.slice.call(arguments)
-        );
-        cli._refreshLine();
-        return result;
-      }
-      process.__defineGetter__('stdout', function() { return newStdout; });
-    };
-    fixStdoutFor(cli);
-    cli.prompt()
+    }, 135000);
   });
 
-  bot.on('kicked', function(reason) {
-    console.log('Kicked with reason: ' + reason);
-  });
-  bot.on('end', function() {
+  process.on('uncaughtException', function(err) {
+    console.log('Rejoining minecraft server after catching error ' + err);
     bot = null;
     setTimeout(function() {
       bot = mineflayer.createBot({
@@ -655,16 +619,4 @@ function bindBotEvents() {
       bindBotEvents();
     }, 15000);
   });
-  // bot.on('spawn', function() {
-  //   var obbyGen = {
-  //     button: vec3(-6437, 70, -5009),
-  //     end1: vec3(-6437, 68, -5007)
-  //   }
-  //   setTimeout(function() {
-  //     // bot.activateBlock(bot.blockAt(obbyGen.button));
-  //     bot.placeBlock(bot.blockAt(obbyGen.end1), vec3(0, 1, 0));
-  //     // bot.dig(bot.blockAt(obbyGen.end1), function(err) {console.log(err)});
-  //   }, 2000);
-  // });
-  radarPlugin(bot, config.radar);
 }
