@@ -528,7 +528,8 @@ function bindBotEvents() {
           bot.plainChat('/ctgstats ' + snitchTransferResult[2]);
           if(!docs[0]) {
             memberObjects = [];
-            bot.on('message', function(ctgMsg) {
+            bot.on('complexMessage', function(ctgMsg) {
+              ctgMsg.text = ctgMsg.text.extra[0];
               var ownershipRegex = /^Admin: (.+)/;
               var moderatorRegex = /^Moderators: (.*)/
               var memberRegex = /^Members: (.*)/;

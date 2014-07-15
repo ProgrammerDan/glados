@@ -132,6 +132,7 @@ function createBot(options) {
         }
       }
       client.emit('message', {text: plainChat});
+      client.emit('complexMessage', {text:j});
   });
 
   function parseChat(chatObj, parentState) {
