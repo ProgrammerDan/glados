@@ -607,17 +607,26 @@ function bindBotEvents() {
     }, 135000);
   });
 
-  process.on('uncaughtException', function(err) {
-    console.log('Rejoining minecraft server after catching error ' + err);
-    bot = null;
-    setTimeout(function() {
-      bot = mineflayer.createBot({
-        host: config.host,
-        port: config.port,
-        username: config.username,
-        password: config.password
-      });
-      bindBotEvents();
-    }, 15000);
-  });
+  // process.on('uncaughtException', function(err) {
+  //   console.log(err);
+  //   if(bot !== null) {
+  //     bot = {};
+  //     console.log('Rejoining minecraft server after catching error ' + err);
+  //     setTimeout(function() {
+  //       console.log("timeout");
+  //       if(bot !== null) {
+  //         console.log(bot);
+  //         console.log('rejoin');
+  //         mineflayer = require('./bot-glue.js');
+  //         bot = mineflayer.createBot({
+  //           host: config.host,
+  //           port: config.port,
+  //           username: config.username,
+  //           password: config.password
+  //         });
+  //         bindBotEvents();
+  //       } else { console.log(bot) + ' bot'}
+  //     }, 50);
+  //   }
+  // });
 }
