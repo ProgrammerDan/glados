@@ -289,65 +289,28 @@ function ensureAuthenticated(req, res, next) {
   // res.redirect('/auth/reddit');
 }
 
-app.post('/auth/minecraft', function(req, res) {
-  console.log('recieved post');
-  if(req.body.accessToken) {
-    console.log('there\'s an accessToken:');
-    console.log(req.body);
-    request({uri: 'https://authserver.mojang.com/refresh', method: 'POST', json: {accessToken: req.body.accessToken, clientToken: "glados"}}, function(error, response, body) {
-      if(!error/* && response.statusCode === 200*/) {
-        console.log('no error, mojang\'s response:');
-        console.log(body);
-        Player.find({token: req.body.token}, function(err, docs) {
-          if(err) {
-            console.log(err);
-          }
-          if(docs[0]) {
-            console.log('there\'s already a user');
+app.get('/auth/minecraft', ensureAuthenticated, function(req, res) {
+  if(req.query.minecraftName) {
+    request('http://skins.minecraft.net/MinecraftSkins/' + req.query.minecraftName + '.png', function(error, response, body) {
+      fs.readFile('public/images/char.png', function(err, data) {
+        if(data == body) {
+          Player.find({token: req.query.token}, function(err, docs) {
             if(docs[0].minecraftName) {
-              console.log('it has a minecraftName:');
-              console.log(docs);
               res.send({response: 'already registered', error: false});
             } else {
-              console.log('no minecraftName, updating?');
-              Player.findOneAndUpdate({token: req.body.token}, {minecraftName: body.selectedProfile.name}, function(err, doc) {
-                // console.log(err);
-                if(err) console.log('error: ' + err);
-                console.log('new Player is...');
-                console.log(doc);
+              Player.findOneAndUpdate({token: req.query.token}, {minecraftName: req.query.minecraftName.toLowerCase()}, function(err) {
+                console.log(err);
                 res.send({response: 'success', error: false});
               });
             }
-          }
-        });
-      } else {
-        console.log(error);
-      }
+          });
+        } else {
+          res.send({response: 'wrong skin', error: true});
+        }
+      });
     });
   }
 });
-// app.get('/auth/minecraft', ensureAuthenticated, function(req, res) {
-//   if(req.query.minecraftName) {
-//     request('http://skins.minecraft.net/MinecraftSkins/' + req.query.minecraftName + '.png', function(error, response, body) {
-//       fs.readFile('public/images/char.png', function(err, data) {
-//         if(data == body) {
-//           Player.find({token: req.query.token}, function(err, docs) {
-//             if(docs[0].minecraftName) {
-//               res.send({response: 'already registered', error: false});
-//             } else {
-//               Player.findOneAndUpdate({token: req.query.token}, {minecraftName: req.query.minecraftName.toLowerCase()}, function(err) {
-//                 console.log(err);
-//                 res.send({response: 'success', error: false});
-//               });
-//             }
-//           });
-//         } else {
-//           res.send({response: 'wrong skin', error: true});
-//         }
-//       });
-//     });
-//   }
-// });
 
 //Api
 app.get('/players', cors(), function (req, res) {
