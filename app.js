@@ -19,6 +19,7 @@ var mongoose = require('mongoose');
 var findOrCreate = require('mongoose-findorcreate');
 var mineflayer = require('./bot-glue.js');
 var vec3 = mineflayer.vec3;
+var color = require('ansi-color').set;
 
 var config = require('configurizer').getVariables();
 var app = express();
@@ -30,6 +31,29 @@ var bot = mineflayer.createBot({
   password: config.password
 });
 bindBotEvents();
+bot.on('kicked', function (reason) {
+  setTimeout(function() {
+    var bot = mineflayer.createBot({
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password
+    });
+    bindBotEvents();
+  }, 1000);
+});
+// bot.on('error', function(err) {
+//   console.log(err);
+//   setTimeout(function() {
+//     var bot = mineflayer.createBot({
+//       host: config.host,
+//       port: config.port,
+//       username: config.username,
+//       password: config.password
+//     });
+//     bindBotEvents();
+//   }, 1000);
+// });
 
 var express = require('express')
   , passport = require('passport')
@@ -41,6 +65,18 @@ var express = require('express')
 var db = mongoose.connect('mongodb://127.0.0.1/glados');
 var Schema = mongoose.Schema;
 
+var serverStatsSchema = new Schema({
+  freeMemory: {
+    megabytes: Number,
+    percentage: Number
+  },
+  freeDisk: Number,
+  worldSize: Number,
+  loadedChunks: Number,
+  livingEntities: Number,
+  tps: Number,
+});
+var serverStats = db.model('serverStats', serverStatsSchema);
 var loginSchema = new Schema({
   username: String,
   date: {type: Date, default: Date.now},
@@ -51,6 +87,7 @@ var entrySchema = new Schema({
   username: String,
   date: {type: Date, default: Date.now},
   coords: [{x: Number, y: Number, z: Number}],
+  world: String,
   snitchName: String,
   snitchGroup: String
 });
@@ -74,9 +111,9 @@ var strongholdGroupMemberSchema = new Schema({
 // var StrongholdGroupMember = db.model('StrongholdGroupMember', strongholdGroupMemberSchema);
 var strongholdGroupSchema = new Schema({
   groupName: String,
-  groupType: String,
   members: [strongholdGroupMemberSchema]
 });
+strongholdGroupSchema.plugin(findOrCreate);
 var StrongholdGroup = db.model('StrongholdGroup', strongholdGroupSchema);
 var playerSchema = new Schema({
   minecraftName: String,
@@ -117,7 +154,6 @@ passport.use(new RedditStrategy({
   },
   function(accessToken, refreshToken, profile, done) {
     Player.findOrCreate({redditName: profile.name}, function(err, usr) {
-      console.log('accessToken: ' + accessToken);
       usr.token = accessToken;
       usr.save(function(err, usr, num) {
         if(err) {
@@ -148,8 +184,8 @@ app.configure(function() {
   app.set('views', __dirname + '/views');
   app.set('view engine', 'jade');
   app.use(express.favicon());
-  app.use(express.logger());
-  app.use(express.logger('dev'));
+  // app.use(express.logger());
+  // app.use(express.logger('dev'));
   app.use(express.cookieParser());
   app.use(express.bodyParser());
   app.use(express.methodOverride());
@@ -207,9 +243,9 @@ app.get('/auth/reddit/callback', function(req, res, next){
       successRedirect: '/account',
       failureRedirect: '/login'
     }, function(err, profile, info) {
-      console.log(profile.name);
+      // console.log(profile.name);
       Player.findOne({redditName: profile.name}, 'redditName minecraftName token -_id', function(err, usr) {
-        res.redirect('http://fwhiffahder.github.io/neurotoxic/index.html#/' + usr.token + '/' + usr.minecraftName + '/' + usr.redditName + '/about');
+        res.redirect('http://' + config.frontendHost + '#/?token=' + usr.token + '&redditName=' + usr.redditName + '&minecraftName=' + usr.minecraftName);
         res.end();
         // res.send(usr);
       });
@@ -238,7 +274,7 @@ http.createServer(app).listen(app.get('port'), function(){
 function ensureAuthenticated(req, res, next) {
   if(req.query.token) {
     Player.findOne({token: req.query.token}, function(err, user) {
-      console.log(user);
+      // console.log(user);
       if(!user){
         return res.send(401,"User Not Authenticated");
       }
@@ -253,28 +289,65 @@ function ensureAuthenticated(req, res, next) {
   // res.redirect('/auth/reddit');
 }
 
-app.get('/auth/minecraft', ensureAuthenticated, function(req, res) {
-  if(req.query.minecraftName) {
-    request('http://minecraft.net/skin/' + req.query.minecraftName + '.png', function(error, response, body) {
-      fs.readFile('public/images/char.png', function(err, data) {
-        if(data == body) {
-          Player.find({token: req.query.token}, function(err, docs) {
+app.post('/auth/minecraft', function(req, res) {
+  console.log('recieved post');
+  if(req.body.accessToken) {
+    console.log('there\'s an accessToken:');
+    console.log(req.body);
+    request({uri: 'https://authserver.mojang.com/refresh', method: 'POST', json: {accessToken: req.body.accessToken, clientToken: "glados"}}, function(error, response, body) {
+      if(!error/* && response.statusCode === 200*/) {
+        console.log('no error, mojang\'s response:');
+        console.log(body);
+        Player.find({token: req.body.token}, function(err, docs) {
+          if(err) {
+            console.log(err);
+          }
+          if(docs[0]) {
+            console.log('there\'s already a user');
             if(docs[0].minecraftName) {
+              console.log('it has a minecraftName:');
+              console.log(docs);
               res.send({response: 'already registered', error: false});
             } else {
-              Player.findOneAndUpdate({token: req.query.token}, {minecraftName: req.query.minecraftName.toLowerCase()}, function(err) {
-                console.log(err);
+              console.log('no minecraftName, updating?');
+              Player.findOneAndUpdate({token: req.body.token}, {minecraftName: body.selectedProfile.name}, function(err, doc) {
+                // console.log(err);
+                if(err) console.log('error: ' + err);
+                console.log('new Player is...');
+                console.log(doc);
                 res.send({response: 'success', error: false});
               });
             }
-          });
-        } else {
-          res.send({response: 'wrong skin', error: true});
-        }
-      });
+          }
+        });
+      } else {
+        console.log(error);
+      }
     });
   }
 });
+// app.get('/auth/minecraft', ensureAuthenticated, function(req, res) {
+//   if(req.query.minecraftName) {
+//     request('http://skins.minecraft.net/MinecraftSkins/' + req.query.minecraftName + '.png', function(error, response, body) {
+//       fs.readFile('public/images/char.png', function(err, data) {
+//         if(data == body) {
+//           Player.find({token: req.query.token}, function(err, docs) {
+//             if(docs[0].minecraftName) {
+//               res.send({response: 'already registered', error: false});
+//             } else {
+//               Player.findOneAndUpdate({token: req.query.token}, {minecraftName: req.query.minecraftName.toLowerCase()}, function(err) {
+//                 console.log(err);
+//                 res.send({response: 'success', error: false});
+//               });
+//             }
+//           });
+//         } else {
+//           res.send({response: 'wrong skin', error: true});
+//         }
+//       });
+//     });
+//   }
+// });
 
 //Api
 app.get('/players', cors(), function (req, res) {
@@ -286,34 +359,55 @@ app.get('/players', cors(), function (req, res) {
 });
 
 app.get('/players/login', cors(), function (req, res) {
-  var limit = req.query.limit;
-  delete req.query.limit;
-  var skip = req.query.skip;
-  delete req.query.skip;
-  var findLogin = Login.find(req.query, 'username logout date -_id').limit(limit).sort({'date': -1}).skip(skip);
+  var skip = 0;
+  if(req.query.page) {
+    var p = req.query.page + 1;
+    var skip = p * 20;
+  }
+  delete req.query.page;
+  var findLogin = Login.find(req.query, 'username logout date -_id').limit(20).sort({'date': -1}).skip(skip);
   findLogin.execFind(function(err, docs) { res.send(docs); });
 });
 
-app.get('/entries', cors(), ensureAuthenticated, function (req, res) {
-  var limit = req.query.limit;
-  delete req.query.limit;
-  var skip = req.query.skip;
-  delete req.query.skip;
-
+app.get('/groups', cors(), ensureAuthenticated, function (req, res) {
   var allowedGroups = [];
   Player.findOne({token: req.query.token}, function(err, doc) {
-    console.log('hey!');
-    console.log(req.query.token);
-    console.log(doc);
     delete req.query.token;
     if(doc) {
       var findGroup = StrongholdGroup.find({members: { $elemMatch: {username: doc.minecraftName} }}, 'groupName -_id');
       findGroup.execFind(function(err, docs) {
         for (var i = 0; i < docs.length; i++) {
-          allowedGroups.push(docs[i].groupName);
+          if(docs[i].groupName) {
+            allowedGroups.push(docs[i].groupName);
+          };
         }
-        var findEntry = Entry.find({$and: [req.query, {snitchGroup: {$in: allowedGroups}}]}, 'username coords date snitchName snitchGroup -_id').limit(limit).sort({'date': -1}).skip(skip);
-        findEntry.execFind(function(err, docs) { res.send(docs); });
+        res.send(allowedGroups);
+      });
+    }
+  });
+});
+app.get('/entries', cors(), ensureAuthenticated, function (req, res) {
+  var skip = 0;
+  if(req.query.page) {
+    var p = req.query.page - 1;
+    var skip = p * 20;
+  }
+  delete req.query.page;
+  var allowedGroups = [];
+  // Entry.find({}, function(err, docs) { res.send(docs); });
+  Player.findOne({token: req.query.token}, function(err, doc) {
+    delete req.query.token;
+    if(doc) {
+      var findGroup = StrongholdGroup.find({members: { $elemMatch: {username: doc.minecraftName} }}, 'groupName -_id');
+      findGroup.execFind(function(err, docs) {
+        for (var i = 0; i < docs.length; i++) {
+          if(docs[i].groupName) {
+            allowedGroups.push(docs[i].groupName);
+          };
+        }
+        // var allowedGroups = [ 'glados' ];
+        var findEntry = Entry.find({$and: [req.query, {snitchGroup: {$in: allowedGroups}}]}, 'username coords date snitchName snitchGroup world -_id').limit(20).sort({'date': -1}).skip(skip);
+        findEntry.execFind(function(err, entries) { res.send(entries); });
       });
     }
   });
@@ -338,7 +432,6 @@ app.get('/status/:stat', cors(), function (req, res) {
   }
   bot.on('message', function(jsonMsg) {
     if(serverStats[req.params.stat].exec(jsonMsg.text)) {
-      // messageHandled = true;
       res.send(serverStats[req.params.stat].exec(jsonMsg.text));
     }
   });
@@ -370,14 +463,17 @@ app.get('/playerlist', cors(), function(req, res) {
 
 app.get('/logout', function(req, res) {
   Player.findOneAndUpdate({token: req.query.token}, {token: null}, function(err, doc) {
-    console.log(doc);
     res.redirect(req.query.redirect);
   });
 });
 
-app.get('/player', function(req, res) {
+app.get('/player', cors(), function(req, res) {
   Player.findOne(req.query, '-token -_id -__v', function(err, doc) {
-    res.send(doc);
+    if(doc) {
+      res.send(doc);
+    } else {
+      res.send( { minecraftName: req.query.minecraftName } );
+    };
   });
 });
 
@@ -413,7 +509,7 @@ function bindBotEvents() {
   });
 
   bot.on('playerJoined', function (player) {
-    console.log(player.username + " has joined.");
+    console.log(color('[SkyNet] ', 'cyan') + color(player.username + ' has joined the game', 'green'));
     Login.create({ username: player.username}, function(err) {
       if (err) {
         console.log(err);
@@ -422,7 +518,7 @@ function bindBotEvents() {
   });
 
   bot.on('playerLeft', function (player) {
-    console.log(player.username + " has left.");
+    console.log(color('[SkyNet] ', 'cyan') + color(player.username + ' has left the game', 'yellow'));
     Login.create({ username: player.username, logout: true }, function(err) {
       if (err) {
         console.log(err);
@@ -435,198 +531,143 @@ function bindBotEvents() {
   }
 
   bot.on('message', function(jsonMsg) {
-    // messageHandled = false;
-    var snitchRegex = / \* (.+) entered snitch at (.*) \[(-?\d+) (-?\d+) (-?\d+)\]/;
-    var snitchResult = snitchRegex.exec(jsonMsg.text);
-    if(snitchResult) {
-      Snitch.findOne({'coords.0.x': snitchResult[3], 'coords.0.y': snitchResult[4], 'coords.0.z': snitchResult[5]}, function(err, doc) {
-        if(doc) {
-          // console.log('docky');
-          // console.log(doc);
-          doc.snitchName = snitchResult[2];
-          doc.save();
-          Entry.create({
-            username: snitchResult[1],
-            coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}],
-            snitchName: snitchResult[2],
-            snitchGroup: doc.snitchGroup
-          }, function(err, entryDoc) {
-            if(err) {
-              console.log('Snitch saving error: ' + err);
-            }
-          });
-        } else {
-          // console.log('look up');
-          bot.plainChat('/jalookup ' + snitchResult[3] + ' ' + snitchResult[4] + ' ' + snitchResult[5]); //look up the snitch's group
-          bot.once('message', function(lookupJsonMsg) { // wait for the server's response and regex it to make sure it's the right message
-            setTimeout(function() {
-              bot.plainChat('/jalist');
-            }, 2000);
-            var lookupRegex = /The snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/
-            var lResult = lookupRegex.exec(lookupJsonMsg.text);
-            if (lResult) {
-              // messageHandled = true;
-              if(lResult[1] === snitchResult[3] && lResult[2] === snitchResult[4] && lResult[3] === snitchResult[5]) {
-                Entry.create({
-                  username: snitchResult[1],
-                  snitchName: snitchResult[2],
-                  coords: [{x: snitchResult[3], y: snitchResult[4], z: snitchResult[5]}],
-                  snitchGroup: lResult[4]
-                }, function(err, doc) {
-                  if(err) {
-                    console.log('Snitch saving error: ' + err);
-                  }
-                });
-              }
-            }
-          });
-        }
-      });
-
-    }
-    var jalistRegex = /[^A-Za-z0-9_]?f?  world    \[(.+) (.+) (.+)\]         (.+)      ([^ ]+)\s*/;
-    var jalistArray = jsonMsg.text.split('\n');
-    for(var i = 2; i < jalistArray.length; i++) {
-      var jalistResult = jalistRegex.exec(jalistArray[i]);
-      if(jalistResult) {
-        // var snitch = {
-        //   coords: [{x: jalistResult[1], y: jalistResult[2], z: jalistResult[3]}],
-        //   snitchGroup: jalistResult[5]
-        // };
-        var snitch = {'coords.0.x': +jalistResult[1], 'coords.0.y': +jalistResult[2], 'coords.0.z': +jalistResult[3], snitchGroup: jalistResult[5]};
-        // console.log([ +jalistResult[1], +jalistResult[2], +jalistResult[3]]);
-        Snitch.findOneAndUpdate({'coords.0.x': +jalistResult[1], 'coords.0.y': +jalistResult[2], 'coords.0.z': +jalistResult[3], snitchGroup: jalistResult[5]}, {coords: [{x: +jalistResult[1], y: +jalistResult[2], z: +jalistResult[3]}], snitchGroup: jalistResult[5]}, {upsert: true}, function(err, doc) {
-        // Snitch.findOne({'coords.0.x': -4192}, function(err, doc) {
-          if(doc) {
-            // console.log('found');
-            // console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-            // console.log(doc);
-            // console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-          } else {
-            // console.log('nerp');
-          }
-        });
-      }
-      var jalistPageRegex = / \* Page (\d+) ------------------------------------------/;
-      var jalistPageResult = jalistPageRegex.exec(jalistArray[i]);
-      if(jalistPageResult) {
-        var number = + jalistPageResult[1] + 1;
-        setTimeout(function() {
-          bot.plainChat('/jalist ' + number);
-        }, 5000);
-      }
-    }
-
-    var snitchTransferRegex = /From ([A-Za-z_]+): :st snitchTransfer (.+)/;
-    var snitchTransferResult = snitchTransferRegex.exec(jsonMsg.text);
-    if(snitchTransferResult) {
-      var findGroup= StrongholdGroup.find({groupName: snitchTransferResult[2].toLowerCase()}, 'groupName groupType members -_id');
-      findGroup.execFind(function(err, docs) {
-        if(docs[0]) {
-          bot.plainChat('/tell ' + snitchTransferResult[1] + ' Error: The group is already registered');
-        } else {
-          bot.plainChat('/ctgstats ' + snitchTransferResult[2]);
-          if(!docs[0]) {
-            memberObjects = [];
-            bot.on('complexMessage', function(ctgMsg) {
-              ctgMsg.text = ctgMsg.text.extra[0];
-              var ownershipRegex = /^Admin: (.+)/;
-              var moderatorRegex = /^Moderators: (.*)/
-              var memberRegex = /^Members: (.*)/;
-              var botIsOwner = null;
-              var botIsModerator = null;
-              if(ownershipRegex.exec(ctgMsg.text)) {
-                var owner = ownershipRegex.exec(ctgMsg.text)[1].toLowerCase();
-                memberObjects.push({ username: owner, permissionLevel: 'owner'});
-              }
-              var moderators = [];
-              if(moderatorRegex.exec(ctgMsg.text)) {
-                var moderators = moderatorRegex.exec(ctgMsg.text)[1].split(', ');
-                for (var i = 0; i < moderators.length; i++) {
-                  if(moderators[i].toLowerCase() === owner) {
-                  } else {
-                    memberObjects.push({ username: moderators[i].toLowerCase(), permissionLevel: 'moderator'});
-                  }
-                }
-              }
-              if(memberRegex.exec(ctgMsg.text)) {
-                var members = memberRegex.exec(ctgMsg.text)[1].split(', ');
-                for (var i = 0; i < members.length; i++) {
-                  memberObjects.push({ username: members[i].toLowerCase(), permissionLevel: 'member'});
-                }
-                StrongholdGroup.create({groupName: snitchTransferResult[2], groupType: 'snitch', members: memberObjects}, {upsert: true}, function(err, doc) {
-                  console.log(err);
-                  console.log(doc);
-                  return
-                });
-              }
-              // messageHandled = true;
-              if(ownershipRegex.exec(ctgMsg.text)) {
-              }
-            });
-          }
-        }
-      });
-    }
-
-    if(/To .+: .+$/.exec(jsonMsg.text)) {
-      // messageHandled = true;
-    }
-
-    var messageFromSomeoneRegex = /From (.+): (.+)/;
-    if(messageFromSomeoneRegex.exec(jsonMsg.text)) {
-      // messageHandled = true;
-      console.log('From ' + messageFromSomeoneRegex.exec(jsonMsg.text)[1] + ': ' + messageFromSomeoneRegex.exec(jsonMsg.text)[2]);
-    }
-
-    var publicChatRegex = /(.+): (.+)/;
-    if(publicChatRegex.exec(jsonMsg.text)) {
-      // messageHandled = true;
-      if(publicChatRegex.exec(jsonMsg.text)[1] === bot.username) {
-        return
-      } else {
-        console.log(publicChatRegex.exec(jsonMsg.text)[1] + ': ' + publicChatRegex.exec(jsonMsg.text)[2]);
-      }
-    }
-
-    // if(!messageHandled) {
-    //   console.log(jsonMsg.text);
+    // var serverStats = {freeDisk: {}};
+    // if(/^-+{ Performance Monitor }-+$/.exec(jsonMsg.text)) {
+    //   bot.once('message', function(jsonMsg) { if(/^- Time Stats$/.exec(jsonMsg.text)) {
+    //     bot.once('message', function(jsonMsg) { if(/^    Time since last restart: \d+ W, \d+ D, \d+ H, \d+ M, \d+ S$/.exec(jsonMsg.text)) {
+    //       bot.once('message', function(jsonMsg) { if(/^- Memory Stats$/.exec(jsonMsg.text)) {
+    //         bot.once('message', function(jsonMsg) { if(/^    Free allocated memory: (\d+) MB \((\d+)%\)$/.exec(jsonMsg.text)) {
+    //           serverStats.freeMemory = {
+    //             megabytes: freeMemory[1],
+    //             percentage: freeMemory[2]
+    //           };
+    //           bot.once('message', function(jsonMsg) { if(/^- Disk Stats$/.exec(jsonMsg.text)) {
+    //             bot.once('message', function(jsonMsg) { if(/^    Server log size: \d+ bytes (\d+ MB)$/.exec(jsonMsg.text)) {
+    //               var freeDisk = /^    Free disk size: (\d+) MB$/.exec(jsonMsg.text);
+    //               bot.once('message', function(jsonMsg) { if(freeDisk) {
+    //                 serverStats.freeDisk = freeDisk[1];
+    //               }});
+    //             }});
+    //           }});
+    //         }});
+    //       }});
+    //     }});
+    //   }});
     // }
+    // if(/    TPS: (\d+.\d+)/.exec(jsonMsg.text)) {
+    // };
+    // var snitchRegex = / \* (.+) entered snitch at (.*) \[(-?\d+) (-?\d+) (-?\d+)\]/;
+    var lookup = /The snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/.exec(jsonMsg.text);
+    if(lookup) {
+      var snitch = {
+        coords: [{
+          x: lookup[1],
+          y: lookup[2],
+          z: lookup[3],
+        }],
+        snitchGroup: lookup[4]
+      };
+      bot.emit('lookup', snitch.coords[0], snitch);
+    };
+    var snitchRegex = /^ \* ([a-zA-Z0-9_]+) (?:entered|logged out in|logged in to) snitch at (.*) \[(world|world_nether|world_end) (-?\d+) (-?\d+) (-?\d+)\]$/.exec(jsonMsg.text);
+    if(snitchRegex) {
+      var snitch = {
+        username: snitchRegex[1],
+        snitchName: snitchRegex[2],
+        world: snitchRegex[3],
+        coords: [{
+          x: snitchRegex[4],
+          y: snitchRegex[5],
+          z: snitchRegex[6]
+        }]
+      };
+      bot.plainChat('/jalookup ' + snitch.coords[0].x + ' ' + snitch.coords[0].y + ' ' + snitch.coords[0].z); //look up the snitch's group
+      bot.once('lookup', function(coords, snitchWithGroup) {
+        if(snitch.coords[0].x === coords.x && snitch.coords[0].y === coords.y && snitch.coords[0].z === coords.z) {
+          snitch.snitchGroup = snitchWithGroup.snitchGroup;
+          Entry.create(snitch, function(err, entryDoc) {
+            if (err) {
+              console.log(err);
+            }
+          });
+        };
+      });
+    }
+
+    var memberList = /^Members are as follows: ([A-Za-z0-9_ ]+) $/.exec(jsonMsg.text);
+    if(memberList) {
+        bot.emit('memberList', [ memberList[1].split(' ') ]);
+    } else if (/^Members are as follows: $/.exec(jsonMsg.text)) {
+        bot.emit('memberList', []);
+    };
+    function updateGroup (groupToUpdate) {
+      var memberObjects = [];
+      bot.plainChat('/nlag ' + groupToUpdate);
+
+      function getPlayersOfType(permissionLevel, callback) {
+        bot.plainChat('/nllm ' + groupToUpdate + ' ' + permissionLevel, function() {
+          bot.once('memberList', function(members) {
+            for (var member in members[0]) {
+              memberObjects.push({ username: members[0][member], permissionLevel: permissionLevel});
+            };
+            // console.log(members);
+            if (callback) {
+              callback();
+            };
+          });
+        });
+      };
+
+      getPlayersOfType('OWNER');
+      getPlayersOfType('ADMINS');
+      getPlayersOfType('MODS');
+      getPlayersOfType('MEMBERS', function() {
+        StrongholdGroup.update({groupName: groupToUpdate}, {members: memberObjects}, {upsert: true}, function(err) {
+          if(err) console.log(err);
+        });
+      });
+    }
+    var manualUpdate = /nlgu ([^ ]+)/.exec(jsonMsg.text);
+    if(manualUpdate) {
+      updateGroup(manualUpdate[1]);
+    };
+    var snitchTransferWhileAway= /You have been invited to the following groups while you were away: ([-A-Za-z0-9_ ,]+)./.exec(jsonMsg.text);
+    if(snitchTransferWhileAway) {
+      var groupsToUpdate = snitchTransferWhileAway[1].split(', ');
+      console.log(groupsToUpdate);
+      for (var group in groupsToUpdate) {
+        console.log(groupsToUpdate[group]);
+        updateGroup(groupsToUpdate[group]);
+      }
+    }
+    var snitchTransfer = /^You have been invited to the group ([-A-Za-z0-9_]+) by ([A-Za-z0-9_]+).$/.exec(jsonMsg.text);
+    if(snitchTransfer) {
+      console.log('result!');
+      console.log(snitchTransfer[1]);
+      updateGroup(snitchTransfer[1]);
+    }
+    var listGroupsPage = /^Page 1 of (\d+).$/.exec(jsonMsg.text);
+    if(listGroupsPage) {
+      for(var i=2; i <= listGroupsPage[1]; i++) {
+        bot.plainChat('/nllg ' + i);
+      };
+    };
+    var listGroups = /^([^ ]+): \(PlayerType\) .+$/.exec(jsonMsg.text);
+    if(listGroups) {
+      updateGroup(listGroups[1]);
+    };
 
   });
 
   bot.on('login', function(){
-    // bot.plainChat('/cttransfer jukeTest fwhiffahder');
+    // bot.plainChat('/nllg');
     setInterval(function(){
       if(bot) {
-        bot.plainChat('Sorry if this bothers you, trying to avoid AFKPGC.');
-        // var yaw = Math.floor(Math.random() * 360);
-        // var pitch = Math.floor(Math.random() * 360);
-        // bot.look(yaw, pitch, true);
+        bot.priorityPlainChat('/groupchat');
+        bot.priorityPlainChat('Sorry if this bothers you, trying to avoid AFKPGC.');
+        bot.priorityPlainChat('/groupchat mcamaret');
       }
     }, 135000);
   });
 
-  // process.on('uncaughtException', function(err) {
-  //   console.log(err);
-  //   if(bot !== null) {
-  //     bot = {};
-  //     console.log('Rejoining minecraft server after catching error ' + err);
-  //     setTimeout(function() {
-  //       console.log("timeout");
-  //       if(bot !== null) {
-  //         console.log(bot);
-  //         console.log('rejoin');
-  //         mineflayer = require('./bot-glue.js');
-  //         bot = mineflayer.createBot({
-  //           host: config.host,
-  //           port: config.port,
-  //           username: config.username,
-  //           password: config.password
-  //         });
-  //         bindBotEvents();
-  //       } else { console.log(bot) + ' bot'}
-  //     }, 50);
-  //   }
-  // });
 }

@@ -85,7 +85,8 @@ function createBot(options) {
    
   client.on([states.PLAY, 0x40], function(packet) {
       console.info(color('Kicked for ' + packet.reason, "blink+red"));
-      throw 'kicked';
+      client.emit('kicked', packet.reason);
+      // throw 'kicked';
       // process.exit(1);
   });
    
@@ -108,7 +109,7 @@ function createBot(options) {
           return; 
       } else if(line == '/quit') {
           var reason = 'disconnect.quitting';
-          console.info('Disconnected from ' + host + ':' + port);
+          console.info('Disconnected from ' + options.host + ':' + options.port);
           client.write([states.PLAY, 0x40], { reason: reason });	
           return;
       } else if(line == '/end') {
@@ -173,8 +174,21 @@ function createBot(options) {
     }
   }
 
-  client.plainChat = function(message) {
-    client.write([states.PLAY, 0x01], { message: message })
+  var messageQueue = [];
+  setInterval(function() {
+    if(messageQueue[0]) {
+      client.write([states.PLAY, 0x01], { message: messageQueue[0].message });
+      if(messageQueue[0].callback) {
+        messageQueue[0].callback();
+      }
+      messageQueue.shift();
+    }
+  }, 1500);
+  client.plainChat = function(message, callback) {
+    messageQueue.push({ message: message, callback: callback });
+  }
+  client.priorityPlainChat = function(message, callback) {
+    messageQueue.unshift({ message: message, callback: callback });
   }
   client.players = {};
   client.on([states.PLAY, 0x38], function(packet) {
