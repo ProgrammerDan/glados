@@ -289,6 +289,28 @@ function ensureAuthenticated(req, res, next) {
   // res.redirect('/auth/reddit');
 }
 
+var minecraftSkinTooLate;
+var minecraftSkins = {};
+fs.readFile('public/images/tooLateSkin.png', function(err, data) {
+  var minecraftSkinTooLate = data;
+});
+app.get('/skin/:skin', function(req, res) {
+  if(minecraftSkins[req.params.stat]) {
+    console.log('thingexists');
+    res.writeHead(200, {'Content-Type': 'image/png'});
+    res.end(minecraftSkins[req.params.stat]);
+  } else {
+    console.log('doesnt');
+    res.writeHead(200, {'Content-Type': 'image/png'});
+    res.end(minecraftSkinTooLate);
+  }
+});
+app.get('/cacheSkin/:skin', function(req, res) {
+    request('http://skins.minecraft.net/MinecraftSkins/' + req.query.minecraftName + '.png', function(error, response, body) {
+      minecraftSkins[req.params.skin] = body;
+      res.send();
+    });
+});
 app.get('/auth/minecraft', ensureAuthenticated, function(req, res) {
   if(req.query.minecraftName) {
     request('http://skins.minecraft.net/MinecraftSkins/' + req.query.minecraftName + '.png', function(error, response, body) {
@@ -520,6 +542,28 @@ function bindBotEvents() {
     // if(/    TPS: (\d+.\d+)/.exec(jsonMsg.text)) {
     // };
     // var snitchRegex = / \* (.+) entered snitch at (.*) \[(-?\d+) (-?\d+) (-?\d+)\]/;
+    var linkPlayer = /^From ([ A-Za-z0-9_]+): link (.+)$/.exec(jsonMsg.text);
+    if(linkPlayer) {
+      Player.find({redditName: linkPlayer[2]}, function(err, docs) {
+        if(docs[0]) {
+          if(docs[0].redditName) {
+            if(docs[0].minecraftName) {
+              bot.plainChat('/tell ' + linkPlayer[1] + ' your minecraft account is already linked');
+            } else {
+              Player.findOneAndUpdate({redditName: linkPlayer[2]}, {minecraftName: linkPlayer[1]}, function(err) {
+                if(err) {
+                  console.log(err);
+                } else {
+                  bot.plainChat('/tell ' + linkPlayer[1] + ' success! log in at http://fwhiffahder.github.io/varys to see your snitches');
+                }
+              });
+            }
+          }
+        } else {
+          bot.plainChat('/tell ' + linkPlayer[1] + ' you need to log in once at http://fwhiffahder.github.io/varys');
+        }
+      });
+    }
     var lookup = /The snitch at \[(-?\d+) (\d+) (-?\d+)\] is owned by (.+)/.exec(jsonMsg.text);
     if(lookup) {
       var snitch = {
@@ -544,7 +588,7 @@ function bindBotEvents() {
           z: snitchRegex[6]
         }]
       };
-      bot.plainChat('/jalookup ' + snitch.coords[0].x + ' ' + snitch.coords[0].y + ' ' + snitch.coords[0].z); //look up the snitch's group
+      bot.plainChat('/jalookup ' + snitch.coords[0].x + ' ' + snitch.coords[0].y + ' ' + snitch.coords[0].z + ' ' + snitch.world); //look up the snitch's group
       bot.once('lookup', function(coords, snitchWithGroup) {
         if(snitch.coords[0].x === coords.x && snitch.coords[0].y === coords.y && snitch.coords[0].z === coords.z) {
           snitch.snitchGroup = snitchWithGroup.snitchGroup;
